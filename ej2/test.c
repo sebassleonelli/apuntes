@@ -1,427 +1,156 @@
-#include <stdbool.h>
-#include <stdint.h>
+
+ /* Tests del Ejercicio 2 usando Recorrido en heap (malloc/free) */
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
 
-#define WITH_ABI_MESSAGE
 #include "../ejs.h"
 #include "../utils.h"
 
-TEST(test_ej2_bloquear_basico) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
 
-  // Feed de user: a -> b -> a
-  tuit_t *t1 = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
-
-  // Bloqueo a 'a' y debe borrar t1 y t3. Y t4 de a
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
-
-  tuit_t *rem = obtener_tuit_en_posicion(user.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("chau", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t2);
-
-  rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+/* Crea en heap un Recorrido copiando el array de acciones (deep copy de acciones) */
+static Recorrido *recorrido_new_from_array(const Accion *acciones, uint64_t n) {
+    Recorrido *r = malloc(sizeof(Recorrido));
+    if (!r) return NULL;
+    r->cant_acciones = n;
+    if (n == 0 || acciones == NULL) {
+        r->acciones = NULL;
+        return r;
+    }
+    r->acciones = malloc(sizeof(Accion) * n);
+    if (!r->acciones) { free(r); return NULL; }
+    memcpy(r->acciones, acciones, sizeof(Accion) * n);
+    return r;
 }
 
-TEST(test_ej2_bloquear_sin_coincidencias) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
-
-
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, b.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, b.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3_copy = crear_tuit("otra", 0, 0, b.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, b.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
-
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-
-  TEST_ASSERT_EQUALS(int32_t, 2, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 2, contar_publicaciones(a.feed));
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, true, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t3, t3_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t3_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+/* Libera un Recorrido creado por recorrido_new_from_array */
+static void recorrido_free_local(Recorrido *r) {
+    if (!r) return;
+    if (r->acciones) {
+        free(r->acciones);
+        r->acciones = NULL;
+    }
+    free(r);
 }
 
-TEST(test_ej2_bloquear_todas_coincidencias) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
+/* --- Tests --- */
 
-  // Feed de user: a -> b -> a
-  tuit_t *t1 = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2 = crear_tuit("chau", 0, 0, a.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, user.id);
+TEST(test_ej2_inversion_vacia) {
+  /* Entrada: recorrido vacío (acciones == NULL, cant == 0) en heap */
+  Recorrido *rec = recorrido_new_from_array(NULL, 0);
+  TEST_ASSERT(rec != NULL);
 
-  tuit_t *t1_copy = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, a.id);
-  tuit_t *t3_copy = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, user.id);
+  uint64_t acciones_ejecutadas = 0;
+  Recorrido *vuelta = TEST_CALL_S(invertirRecorridoConDirecciones, rec, acciones_ejecutadas);
+  TEST_ASSERT(vuelta == NULL);
 
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-
-  TEST_ASSERT_EQUALS(int32_t, 0, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 0, contar_publicaciones(a.feed));
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t3, t3_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t1_copy);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t3_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-
-  liberar_usuario(&user);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&a_copy);
+  recorrido_free_local(rec);
 }
 
-TEST(test_ej2_solo_feed_bloqueado) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
-
-  // Feed de user: a -> b -> a
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-
-
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
-
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
-
-  tuit_t *rem = obtener_tuit_en_posicion(user.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("chau", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t2);
-
-  rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t2);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+TEST(test_ej2_inversion_sin_recorrido) {
+  /* Llamada con NULL como recorrido */
+  uint64_t acciones_ejecutadas = 0;
+  Recorrido *vuelta = TEST_CALL_S(invertirRecorridoConDirecciones, NULL, acciones_ejecutadas);
+  TEST_ASSERT(vuelta == NULL);
 }
 
-TEST(test_ej2_bloquear_solo_feed_bloqueador) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_inversion_valida) {
+  Accion acciones[] = { ACC_OESTE, ACC_SUR, ACC_NORTE, ACC_ESTE };
+  Recorrido *rec = recorrido_new_from_array(acciones, 4);
+  TEST_ASSERT(rec != NULL);
 
-  // Feed de user: a -> b -> a
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, a.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
+  uint64_t acciones_ejecutadas = 4;
+  Recorrido *vuelta = TEST_CALL_S(invertirRecorridoConDirecciones, rec, acciones_ejecutadas);
+  TEST_ASSERT(vuelta != NULL);
+  TEST_ASSERT(vuelta->cant_acciones == 4);
+  TEST_ASSERT(vuelta->acciones[0] == ACC_OESTE);
+  TEST_ASSERT(vuelta->acciones[1] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[2] == ACC_NORTE);
+  TEST_ASSERT(vuelta->acciones[3] == ACC_ESTE);
 
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-
-
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
-
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, a.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
-
-  tuit_t *rem = obtener_tuit_en_posicion(user.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("chau", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t2);
-
-  rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, true, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t2);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  /* liberar tanto la vuelta (devuelta por la función) como el Recorrido de entrada */
+  if (vuelta) {
+    free(vuelta->acciones);
+    free(vuelta);
+  }
+  recorrido_free_local(rec);
 }
 
-TEST(test_ej2_bloquear_bloqueos_multiples) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_inversion_valida_todos_mismo) {
+  Accion acciones[] = { ACC_NORTE, ACC_NORTE, ACC_NORTE, ACC_NORTE };
+  Recorrido *rec = recorrido_new_from_array(acciones, 4);
+  TEST_ASSERT(rec != NULL);
 
-  // Feed de user: a -> b -> a
-  tuit_t *t1 = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
-  tuit_t *t6 = crear_tuit("ay ay ay ay", 0, 0, user.id);
-  tuit_t *t7 = crear_tuit("canta y no llores", 0, 0, a.id);
-  
+  uint64_t acciones_ejecutadas = 4;
+  Recorrido *vuelta = TEST_CALL_S(invertirRecorridoConDirecciones, rec, acciones_ejecutadas);
+  TEST_ASSERT(vuelta != NULL);
+  TEST_ASSERT(vuelta->cant_acciones == 4);
+  TEST_ASSERT(vuelta->acciones[0] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[1] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[2] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[3] == ACC_SUR);
 
-  user.bloqueados = (usuario_t **)malloc(2 * sizeof(usuario_t*));
-
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-  agregar_publicacion(&b, crear_publicacion(t6));
-  agregar_publicacion(&b, crear_publicacion(t7));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
-
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-  TEST_CALL_V(bloquearUsuario, &user, &b);
-
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 0, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(b.feed));
-
-  tuit_t* rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
-
-  rem = obtener_tuit_en_posicion(b.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, a.id, rem->id_autor);
-  TEST_ASSERT(strcmp("canta y no llores", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t7);
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 2);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &b);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 2] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, false, true, true, true));
-
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t6);
-  liberar_tuit(t7);
-  
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  if (vuelta) {
+    free(vuelta->acciones);
+    free(vuelta);
+  }
+  recorrido_free_local(rec);
 }
+
+TEST(test_ej2_inversion_compleja) {
+  Accion acciones[] = {
+    ACC_ESTE, ACC_NORTE, ACC_OESTE, ACC_SUR,
+    ACC_ESTE, ACC_SUR,  ACC_NORTE, ACC_OESTE,
+    ACC_SUR,  ACC_ESTE,  ACC_NORTE, ACC_OESTE,
+    ACC_ESTE,  ACC_SUR,  ACC_NORTE, ACC_OESTE
+  };
+  Recorrido *rec = recorrido_new_from_array(acciones, 16);
+  TEST_ASSERT(rec != NULL);
+
+  uint64_t acciones_ejecutadas = 16;
+  Recorrido *vuelta = TEST_CALL_S(invertirRecorridoConDirecciones, rec, acciones_ejecutadas);
+  TEST_ASSERT(vuelta != NULL);
+  TEST_ASSERT(vuelta->cant_acciones == 16);
+
+  TEST_ASSERT(vuelta->acciones[0] == ACC_ESTE);
+  TEST_ASSERT(vuelta->acciones[1] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[2] == ACC_NORTE);
+  TEST_ASSERT(vuelta->acciones[3] == ACC_OESTE);
+  TEST_ASSERT(vuelta->acciones[4] == ACC_ESTE);
+  TEST_ASSERT(vuelta->acciones[5] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[6] == ACC_OESTE);
+  TEST_ASSERT(vuelta->acciones[7] == ACC_NORTE);
+  TEST_ASSERT(vuelta->acciones[8] == ACC_ESTE);
+  TEST_ASSERT(vuelta->acciones[9] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[10] == ACC_NORTE);
+  TEST_ASSERT(vuelta->acciones[11] == ACC_OESTE);
+  TEST_ASSERT(vuelta->acciones[12] == ACC_NORTE);
+  TEST_ASSERT(vuelta->acciones[13] == ACC_ESTE);
+  TEST_ASSERT(vuelta->acciones[14] == ACC_SUR);
+  TEST_ASSERT(vuelta->acciones[15] == ACC_OESTE);
+
+  if (vuelta) {
+    free(vuelta->acciones);
+    free(vuelta);
+  }
+  recorrido_free_local(rec);
+}
+
+
 
 int main(int argc, char *argv[]) {
-  printf("Corriendo los tests del ejercicio 2...\n");
+  (void)argc; (void)argv;
+  printf("Corriendo los tests del ejercicio 2 ...\n");
 
-  test_ej2_bloquear_basico();
-  test_ej2_bloquear_sin_coincidencias();
-  test_ej2_bloquear_todas_coincidencias();
-  test_ej2_solo_feed_bloqueado();
-  test_ej2_bloquear_solo_feed_bloqueador();
-  test_ej2_bloquear_bloqueos_multiples();
+  test_ej2_inversion_vacia();
+  test_ej2_inversion_sin_recorrido();
+  test_ej2_inversion_valida();
+  test_ej2_inversion_valida_todos_mismo();
+  test_ej2_inversion_compleja();
 
-  tests_end("Ejercicio 2");
+  tests_end("Ejercicio 2 finish");
+  return 0;
 }

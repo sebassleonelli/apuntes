@@ -1,5 +1,5 @@
 AS = nasm
-ASFLAGS = -f elf64 -g -F DWARF 
+ASFLAGS = -f elf64 -g -F DWARF
 LDFLAGS = -lm
 CFLAGS= -Wall -Wextra -Wno-pedantic -O0 -g -Wno-unused-function -Wno-unused-variable -Wno-unused-parameter -no-pie -z noexecstack -I ../../test_utils/
 VPATH=.:../../test_utils
@@ -52,7 +52,7 @@ test_c: test.c ej3.o utils.o
 test_asm: test.c ej3_asm.o utils.o
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-test_abi: test.c ej3_abi.o utils.o abi_enforcer_regsave.o
+test_abi: test.c ej3_abi.o utils.o abi_enforcer_regsave.o 
 	$(CC) $(CFLAGS) -DWITH_ABI_ENFORCER=1 $^ -o $@ $(LDFLAGS)
 
 main_c: main.c ej3.c ../utils.c

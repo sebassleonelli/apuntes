@@ -1,31 +1,42 @@
 #include "../ejs.h"
 
-void bloquearUsuario(usuario_t *usuario, usuario_t *usuarioABloquear){
+Accion invertirAccion(Accion accion);
 
-  usuario->bloqueados[usuario->cantBloqueados] = usuarioABloquear;
-  usuario->cantBloqueados++;
+Recorrido *invertirRecorridoConDirecciones(const Recorrido *rec, uint64_t len) {
+    if (rec == NULL || rec->acciones == NULL)
+    {
+        return NULL;
+    }
+    Recorrido* vuelta = malloc(sizeof(Recorrido));
+    vuelta->cant_acciones = len;
 
-  borrarFeed(usuario->feed,usuarioABloquear);
-  borrarFeed(usuarioABloquear->feed,usuario);
+    Accion* arrayDeVuelta = malloc(rec->cant_acciones*sizeof(Accion));
 
+    for (uint64_t i = 0; i < len; i++)
+    {
+        Accion original = rec->acciones[(len - 1) - i];
+        Accion invertida = invertirAccion(original);
+        arrayDeVuelta[i] = invertida;
+    }
+    vuelta->acciones = arrayDeVuelta;
+    return vuelta;
 }
 
-void borrarFeed(feed_t *feed, usuario_t *user){
-  // Usamos puntero indirecto (puntero a un puntero) para simplificar la lógica de re-enlazar.
-  // 'indirecto' apunta al puntero que debemos modificar (ya sea feed->first o anterior->next).
-  publicacion_t** indirecto = &(feed->first);
-
-  while(*indirecto != NULL)
-  {
-    publicacion_t* actual = *indirecto;
-
-    if(actual->value->id_autor == user->id){
-      publicacion_t* siguiente = actual->next;
-      free(actual);
-      *indirecto= siguiente;
-    }else
+Accion invertirAccion(Accion accion){
+    if (accion == 0)
     {
-      indirecto = &(actual->next);
+        return 1;
     }
-  }
+    if (accion == 1)
+    {
+        return 0;
+    }
+    if (accion == 2)
+    {
+        return 3;
+    }
+    if (accion == 3)
+    {
+        return 2;
+    } 
 }

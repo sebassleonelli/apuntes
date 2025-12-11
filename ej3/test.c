@@ -3,270 +3,114 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define WITH_ABI_MESSAGE
 #include "../ejs.h"
 #include "../utils.h"
 
-TEST(test_ej3_trending_basico) {
-  usuario_t user = crear_usuario(1);
-  // Feed: id_autor 2, 3, 4, 5
-  tuit_t *t0 = crear_tuit("a", 0, 0, 1);
-  tuit_t *t1 = crear_tuit("b", 4, 0, 1);
-  tuit_t *t2 = crear_tuit("c", 0, 0, 1);
-  tuit_t *t3 = crear_tuit("d", 4, 0, 1);
+/* Test 1: usar mapa de ejemplo con un tesoro alcanzable -> debe devolver 100 */
+TEST(test_ej3_ejemplo_un_tesoro) {
+    Mapa mapa = crearMapaEjemplo(); /* en utils: habitación 2 es tesoro con valor 100 */
+    bool *visitado = calloc(mapa.n_habitaciones, sizeof(bool));
+    TEST_ASSERT(visitado != NULL);
 
-  tuit_t *t0copy = crear_tuit("a", 0, 0, 1);
-  tuit_t *t1copy = crear_tuit("b", 4, 0, 1);
-  tuit_t *t2copy = crear_tuit("c", 0, 0, 1);
-  tuit_t *t3copy = crear_tuit("d", 4, 0, 1);
-
-  agregar_publicacion(&user, crear_publicacion(t0));
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-
-  usuario_t user_copy = clonar_usuario(&user);
-
-  tuit_t **arr = TEST_CALL_S(trendingTopic, &user, isTrendingTopic);
-
-  TEST_ASSERT_EQUALS(int, 2, tamanio_array_tuits(arr));
-  TEST_ASSERT(array_tuits_contiene_tuit(arr, t3));
-  TEST_ASSERT(array_tuits_contiene_tuit(arr, t1));
-
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t0, t0copy));
-  TEST_ASSERT(tuits_iguales(t1, t1copy));
-  TEST_ASSERT(tuits_iguales(t2, t2copy));
-  TEST_ASSERT(tuits_iguales(t3, t3copy));
-
-  liberar_tuit(t0);
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-
-  liberar_tuit(t0copy);
-  liberar_tuit(t1copy);
-  liberar_tuit(t2copy);
-  liberar_tuit(t3copy);
-
-  free(arr);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+    uint32_t total = TEST_CALL_I(sumarTesoros, &mapa, 0u, visitado);
+    TEST_ASSERT(total == 100u); /* la "Cámara del Tesoro" en el ejemplo vale 100 */
+    free(visitado);
+    liberarMapa(&mapa);
 }
 
-TEST(test_ej3_trending_sin_match) {
-  usuario_t user = crear_usuario(1);
+/* Test 2: mapa sin tesoros -> 0 */
+TEST(test_ej3_ejemplo_sin_tesoros) {
+    Mapa mapa = crearMapaEjemplo2(); /* en utils: no hay tesoros */
+    bool *visitado = calloc(mapa.n_habitaciones, sizeof(bool));
+    TEST_ASSERT(visitado != NULL);
 
-  tuit_t *t0 = crear_tuit("a", 4, 0, 1);
-  tuit_t *t1 = crear_tuit("b", 4, 0, 1);
-  tuit_t *t2 = crear_tuit("c", 4, 0, 1);
-  tuit_t *t3 = crear_tuit("d", 4, 0, 1);
+    uint32_t total = TEST_CALL_I(sumarTesoros, &mapa, 0u, visitado);
+    TEST_ASSERT(total == 0u);
 
-  tuit_t *t0copy = crear_tuit("a", 4, 0, 1);
-  tuit_t *t1copy = crear_tuit("b", 4, 0, 1);
-  tuit_t *t2copy = crear_tuit("c", 4, 0, 1);
-  tuit_t *t3copy = crear_tuit("d", 4, 0, 1);
-  
-  agregar_publicacion(&user, crear_publicacion(t0));
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-
-  usuario_t user_copy = clonar_usuario(&user);
-
-  tuit_t **arr = TEST_CALL_S(trendingTopic, &user, isTrendingTopic2);
-  
-  TEST_ASSERT_EQUALS(int, 0, tamanio_array_tuits(arr));
-  TEST_ASSERT(arr == NULL);
-
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t0, t0copy));
-  TEST_ASSERT(tuits_iguales(t1, t1copy));
-  TEST_ASSERT(tuits_iguales(t2, t2copy));
-  TEST_ASSERT(tuits_iguales(t3, t3copy));
-
-  liberar_tuit(t0);
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-
-  liberar_tuit(t0copy);
-  liberar_tuit(t1copy);
-  liberar_tuit(t2copy);
-  liberar_tuit(t3copy);
-
-  free(arr);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+    free(visitado);
+    liberarMapa(&mapa);
 }
 
+/* Test 3: mapa con varios tesoros (crearMapaTesoros) -> suma de todos los tesoros livianos */
+TEST(test_ej3_multiples_tesoros_conectados) {
+    Mapa mapa = crearMapaTesoros(); /* en utils: salas 1 y 3 son tesoros (valor por defecto 100 cada una) */
+    bool *visitado = calloc(mapa.n_habitaciones, sizeof(bool));
+    TEST_ASSERT(visitado != NULL);
 
-TEST(test_ej3_trending_sin_match_por_autor) {
-  usuario_t user = crear_usuario(1);
-  tuit_t *t0 = crear_tuit("a", 4, 0, 2);
-  tuit_t *t1 = crear_tuit("b", 4, 0, 3);
-  tuit_t *t2 = crear_tuit("c", 4, 0, 4);
-  tuit_t *t3 = crear_tuit("d", 4, 0, 5);
+    uint32_t total = TEST_CALL_I(sumarTesoros, &mapa, 0u, visitado);
+    /* según crearMapaTesoros, hay dos salas con tesoro alcanzables desde 0:
+       valor esperado = 100 + 100 = 200 */
+    TEST_ASSERT(total == 200u);
 
-  tuit_t *t0copy = crear_tuit("a", 4, 0, 2);
-  tuit_t *t1copy = crear_tuit("b", 4, 0, 3);
-  tuit_t *t2copy = crear_tuit("c", 4, 0, 4);
-  tuit_t *t3copy = crear_tuit("d", 4, 0, 5);
-  
-  agregar_publicacion(&user, crear_publicacion(t0));
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-
-  usuario_t user_copy = clonar_usuario(&user);
-
-  tuit_t **arr = TEST_CALL_S(trendingTopic, &user, isTrendingTopic);
-  TEST_ASSERT_EQUALS(int, 0, tamanio_array_tuits(arr));
-  TEST_ASSERT(arr == NULL);
-
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t0, t0copy));
-  TEST_ASSERT(tuits_iguales(t1, t1copy));
-  TEST_ASSERT(tuits_iguales(t2, t2copy));
-  TEST_ASSERT(tuits_iguales(t3, t3copy));
-
-  liberar_tuit(t0);
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-
-  liberar_tuit(t0copy);
-  liberar_tuit(t1copy);
-  liberar_tuit(t2copy);
-  liberar_tuit(t3copy);
-
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+    free(visitado);
+    liberarMapa(&mapa);
 }
 
-TEST(test_ej3_trending_todos_match) {
-  usuario_t user = crear_usuario(3);
-  tuit_t *t0 = crear_tuit("m1", 8, 0, 3);
-  tuit_t *t1 = crear_tuit("m2", 8, 0, 3);
-  tuit_t *t2 = crear_tuit("m3", 8, 0, 3);
+/* Test 4: ciclo en el grafo => no debe contarse dos veces (se usan crearHabitacion + conectarHabitaciones) */
+TEST(test_ej3_ciclo_no_recuento_duplicado) {
+    Mapa mapa;
+    mapa.n_habitaciones = 3u;
+    mapa.habitaciones = malloc(sizeof(Habitacion) * mapa.n_habitaciones);
+    TEST_ASSERT(mapa.habitaciones != NULL);
+    mapa.id_entrada = 0u;
 
-  tuit_t *t0copy = crear_tuit("m1", 8, 0, 3);
-  tuit_t *t1copy = crear_tuit("m2", 8, 0, 3);
-  tuit_t *t2copy = crear_tuit("m3", 8, 0, 3);
+    mapa.habitaciones[0] = crearHabitacion(0u, "A", false);
+    mapa.habitaciones[1] = crearHabitacion(1u, "B", true);  /* tesoro (valor por defecto 100 en utils) */
+    mapa.habitaciones[2] = crearHabitacion(2u, "C", true);  /* tesoro (valor por defecto 100) */
 
-  agregar_publicacion(&user, crear_publicacion(t0));
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
+    /* Conexiones que forman ciclo: 0 <-> 1, 1 <-> 2, 2 <-> 0 */
+    conectarHabitaciones(&mapa.habitaciones[0], &mapa.habitaciones[1], ACC_ESTE);
+    conectarHabitaciones(&mapa.habitaciones[1], &mapa.habitaciones[2], ACC_SUR);
+    conectarHabitaciones(&mapa.habitaciones[2], &mapa.habitaciones[0], ACC_OESTE);
 
-  usuario_t user_copy = clonar_usuario(&user);
+    bool *visitado = calloc(mapa.n_habitaciones, sizeof(bool));
+    TEST_ASSERT(visitado != NULL);
 
-  tuit_t **arr = TEST_CALL_S(trendingTopic, &user, isTrendingTopic2);
-  TEST_ASSERT_EQUALS(int, 3, tamanio_array_tuits(arr));
-  TEST_ASSERT(array_tuits_contiene_tuit(arr, t0));
-  TEST_ASSERT(array_tuits_contiene_tuit(arr, t1));
-  TEST_ASSERT(array_tuits_contiene_tuit(arr, t2));
-  
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, true));
+    uint32_t total = TEST_CALL_I(sumarTesoros, &mapa, 0u, visitado);
+    /* Deben contarse ambos tesoros exactamente una vez: 100 + 100 = 200 */
+    TEST_ASSERT(total == 200u);
 
-  TEST_ASSERT(tuits_iguales(t0, t0copy));
-  TEST_ASSERT(tuits_iguales(t1, t1copy));
-  TEST_ASSERT(tuits_iguales(t2, t2copy));
-
-  liberar_tuit(t0copy);
-  liberar_tuit(t1copy);
-  liberar_tuit(t2copy);
-
-  liberar_tuit(t0);
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-
-  free(arr);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+    free(visitado);
+    liberarMapa(&mapa);
 }
 
-TEST(test_ej3_trending_grandes_ids) {
-  usuario_t user = crear_usuario(4000000000u);
+/* Test 5: tesoro existe pero no es alcanzable desde la habitación inicial -> no se cuenta */
+TEST(test_ej3_tesoro_desconectado_no_contar) {
+    Mapa mapa;
+    mapa.n_habitaciones = 3u;
+    mapa.habitaciones = malloc(sizeof(Habitacion) * mapa.n_habitaciones);
+    TEST_ASSERT(mapa.habitaciones != NULL);
+    mapa.id_entrada = 0u;
 
-  tuit_t *t0 = crear_tuit("g1", 6, 0, 4000000000u);
-  tuit_t *t1 = crear_tuit("g2", 0, 0, 4000000000u);
-  agregar_publicacion(&user, crear_publicacion(t0));
-  agregar_publicacion(&user, crear_publicacion(t1));
+    mapa.habitaciones[0] = crearHabitacion(0u, "Entrada", false);
+    mapa.habitaciones[1] = crearHabitacion(1u, "SalaCon", false);
+    mapa.habitaciones[2] = crearHabitacion(2u, "IslaTesoro", true); /* tesoro aislado */
 
-  usuario_t user_copy = clonar_usuario(&user);
+    /* Solo conectamos 0 <-> 1; la habitación 2 queda desconectada */
+    conectarHabitaciones(&mapa.habitaciones[0], &mapa.habitaciones[1], ACC_ESTE);
 
-  tuit_t **arr = TEST_CALL_S(trendingTopic, &user, isTrendingTopic);
-  TEST_ASSERT_EQUALS(int, 1, tamanio_array_tuits(arr));
-  TEST_ASSERT(array_tuits_contiene_tuit(arr, t0));
+    bool *visitado = calloc(mapa.n_habitaciones, sizeof(bool));
+    TEST_ASSERT(visitado != NULL);
 
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, true));
+    uint32_t total = TEST_CALL_I(sumarTesoros, &mapa, 0u, visitado);
+    /* El tesoro en la habitación 2 no es alcanzable desde 0, por lo que no debe sumarse */
+    TEST_ASSERT(total == 0u);
 
-  liberar_tuit(t0);
-  liberar_tuit(t1);
-  free(arr);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+    free(visitado);
+    liberarMapa(&mapa);
 }
 
-TEST(test_ej3_trending_llamadas_multiples) {
-  usuario_t user = crear_usuario(14);
-
-  tuit_t *t0 = crear_tuit("m1", 0, 0, 2);
-  tuit_t *t1 = crear_tuit("m2", 6, 0, 14);
-  agregar_publicacion(&user, crear_publicacion(t0));
-  agregar_publicacion(&user, crear_publicacion(t1));
-
-  usuario_t user_copy = clonar_usuario(&user);
-
-  tuit_t **a = TEST_CALL_S(trendingTopic, &user,
-                           isTrendingTopic); 
-  TEST_ASSERT_EQUALS(int, 1, tamanio_array_tuits(a));
-  TEST_ASSERT(array_tuits_contiene_tuit(a, t1));
-  
-  tuit_t *t2 = crear_tuit("m3", 8, 0, 14);
-  
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user_copy, crear_publicacion(t2));
-  
-  tuit_t **b = TEST_CALL_S(trendingTopic, &user, isTrendingTopic2);
-  TEST_ASSERT_EQUALS(int, 2, tamanio_array_tuits(b));
-  TEST_ASSERT(array_tuits_contiene_tuit(b, t1));
-  TEST_ASSERT(array_tuits_contiene_tuit(b, t2));
-
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, true));
-  
-  liberar_tuit(t0);
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  free(a);
-  free(b);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
-}
-
-TEST(test_ej3_trending_feed_vacio) {
-  usuario_t user = crear_usuario(100);
-  usuario_t user_copy = clonar_usuario(&user);
-  tuit_t **arr = TEST_CALL_S(trendingTopic, &user, isTrendingTopic);
-  TEST_ASSERT_EQUALS(int, 0, tamanio_array_tuits(arr));
-  TEST_ASSERT(arr == NULL);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
-}
-
+/* -------------------- main -------------------- */
 
 int main(int argc, char *argv[]) {
-  printf("Corriendo los tests del ejercicio 3...\n");
-  test_ej3_trending_basico();
-  test_ej3_trending_sin_match();
-  test_ej3_trending_sin_match_por_autor();
-  test_ej3_trending_todos_match();
-  test_ej3_trending_grandes_ids();
-  test_ej3_trending_llamadas_multiples();
-  test_ej3_trending_feed_vacio();
-  tests_end("Ejercicio 3");
-  return 0;
+    printf("Corriendo los tests del ejercicio 3...\n");
+
+    test_ej3_ejemplo_un_tesoro();
+    test_ej3_ejemplo_sin_tesoros();
+    test_ej3_multiples_tesoros_conectados();
+    test_ej3_ciclo_no_recuento_duplicado();
+    test_ej3_tesoro_desconectado_no_contar();
+
+    tests_end("Ejercicio 3");
+    return 0;
 }

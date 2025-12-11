@@ -1,190 +1,125 @@
-extern malloc
+; ------------------------
+; Offsets para los structs
+; Plataforma: x86_64 (LP64)
+; ------------------------
 
-;########### SECCION DE DATOS
 section .data
 
-;########### SECCION DE TEXTO (PROGRAMA)
 section .text
 
-; Completar las definiciones (serán revisadas por ABI enforcer):
-TUIT_MENSAJE_OFFSET EQU 0
-TUIT_FAVORITOS_OFFSET EQU 140
-TUIT_RETUITS_OFFSET EQU 142 ; 2 de padding
-TUIT_ID_AUTOR_OFFSET EQU 144
-TUIT_SIZE EQU 148 ;La estructura se alinea al mas grande, en este caso 4 ==> 148/4 = 0 de resto
+; COMPLETAR las definiciones (serán revisadas por ABI enforcer):
+; ------------------------
+; Contenido
+; ------------------------
+CONT_NOMBRE_OFFSET      EQU 0      ; char nombre[64]
+CONT_VALOR_OFFSET       EQU 64     ; uint32_t valor
+CONT_COLOR_OFFSET       EQU 68      ; char color[32]
+CONT_ES_TESORO_OFFSET   EQU 100     ; bool es_tesoro
+CONT_PESO_OFFSET        EQU 104   ; float peso
+CONT_SIZE               EQU 108      ; sizeof(Contenido) (rounded)
 
-PUBLICACION_NEXT_OFFSET EQU 0
-PUBLICACION_VALUE_OFFSET EQU 8
-PUBLICACION_SIZE EQU 16
+; ------------------------
+; Habitacion
+; ------------------------
+HAB_ID_OFFSET          EQU 0         ; uint32_t id
+HAB_VECINOS_OFFSET     EQU 4         ; uint32_t vecinos[ACC_CANT] (4 entradas)
+HAB_CONTENIDO_OFFSET   EQU 20        ; Contenido contenido (aligned to 4)
+HAB_VISITAS_OFFSET     EQU 128       ; uint32_t visitas
+HAB_SIZE               EQU 132       ; sizeof(Habitacion)
 
-FEED_FIRST_OFFSET EQU 0 
-FEED_SIZE EQU 8
+; ------------------------
+; Mapa
+; ------------------------
+MAP_HABITACIONES_OFFSET    EQU 0     ; Habitacion *habitaciones  (pointer, 8 bytes)
+MAP_N_HABITACIONES_OFFSET  EQU 8     ; uint64_t n_habitaciones       (8 bytes)
+MAP_ID_ENTRADA_OFFSET      EQU 16   ; uint32_t id_entrada         (4 bytes)
+MAP_SIZE                   EQU 24   ; sizeof(Mapa) (padded to 8)
 
-USUARIO_FEED_OFFSET EQU 0;
-USUARIO_SEGUIDORES_OFFSET EQU 8
-USUARIO_CANT_SEGUIDORES_OFFSET EQU 16; 
-USUARIO_SEGUIDOS_OFFSET EQU 24 
-USUARIO_CANT_SEGUIDOS_OFFSET EQU 32 
-USUARIO_BLOQUEADOS_OFFSET EQU 40; 
-USUARIO_CANT_BLOQUEADOS_OFFSET EQU 48 
-USUARIO_ID_OFFSET EQU 52; 
-USUARIO_SIZE EQU 56 
+; ------------------------
+; Recorrido
+; ------------------------
+REC_ACCIONES_OFFSET        EQU 0     ; Accion *acciones  (pointer, 8 bytes)
+REC_CANT_ACCIONES_OFFSET   EQU 8     ; uint64_t cant_acciones (8 bytes)
+REC_SIZE                  EQU 16    ; sizeof(Recorrido)
 
 
-; tuit_t **trendingTopic(usuario_t *usuario, uint8_t (*esTuitSobresaliente)(tuit_t *));
-global trendingTopic 
+; Notar que el enum aparece como puntero, entonces no afecta los offsets
 
-; --- tuit_t** trendingTopic(usuario_t* usuario, uint8_t (*esTuitSobresaliente)(tuit_t*)) ---
-; Argumentos: rdi=usuario, rsi=esTuitSobresaliente (función)
-trendingTopic:
+global  sumarTesoros
+sumarTesoros
+
     push rbp
-    mov rbp, rsp
-    ; Guardar registros callee-saved (rbx, r12-r15)
-    push rbx
+    mov rbp,rsp
     push r12
     push r13
     push r14
     push r15
-    
-    ; Guardar argumentos originales
-    mov r12, rdi  ; r12 = usuario
-    mov r13, rsi  ; r13 = esTuitSobresaliente
-
-    call contarTuitsSobresalientes
-
-    mov ebx,eax ;cantidad de tuits sobresalientes del ususario
-
-    cmp ebx,0
-    je .returnNull
-
-    imul rbx,8
-    inc rbx
-    mov rdi,rbx
-
-    call malloc
-
-    mov r14,rax ;puntero al arreglo de tuits
-    cmp r14,0
-    je .returnNull
-
-    mov r10d, dword[r12 + USUARIO_ID_OFFSET] ;usuario -> id
-    mov r9, [r12 + USUARIO_FEED_OFFSET]
-    mov r11, [r9 + FEED_FIRST_OFFSET] ;actual = usuario->feed->first
-
-    xor r8,r8 ;indice arreglo
-
-.while:
-
-    cmp r11,0
-    je .returnArreglo
-
-    mov r15, [r11 + PUBLICACION_VALUE_OFFSET] ;puntero al tuit
-
-    cmp r15,0
-    je .sigIteracion
-
-    cmp dword[r15 + TUIT_ID_AUTOR_OFFSET],r10d
-    jne .sigIteracion
-
-    jmp .aplicarFuncion
-
-.aplicarFuncion:
-    mov rdi, r15
-    call r13
-    cmp al,1
-    jne .sigIteracion
-
-    mov [r14 + r8*8],r15
-    inc r8
-
-.sigIteracion:
-    mov r11, [r11 + PUBLICACION_NEXT_OFFSET]
-    jmp .while
-
-.returnNull:
-    mov rax,0
-    jmp .fin_trending
-.returnArreglo:
-
-    mov qword[r14 + r8*8],0
-    mov rax,r14 
-
-.fin_trending:
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-    pop rbp
-    ret
-
-
-; --- uint32_t contarTuitsSobresalientes(usuario_t* usuario, uint8_t (*esTuitSobresaliente)(tuit_t*)) ---
-; Argumentos: rdi=usuario, rsi=esTuitSobresaliente (función)
-contarTuitsSobresalientes:
-    push rbp
-    mov rbp, rsp
-    ; Guardar registros callee-saved (rbx, r12-r15)
     push rbx
-    push r12
-    push r13
-    push r14
-    push r15 
+    sub rsp,8
 
-    ; Inicialización de registros
-    mov r12, rdi      ; r12 = usuario
-    mov r13, rsi      ; r10 = esTuitSobresaliente (función)
-    
+    mov r12, rdi ;mapa
+    mov r13, rsi ;id habitacion actual
+    mov r14, rdx ;puntero al array de bools visitados
+
     cmp r12,0
-    je .return
+    je return0
 
-    cmp qword[r12 + USUARIO_FEED_OFFSET], 0
-    je .return
+    cmp r13,99
+    je return0
 
-    mov r8, [r12 + USUARIO_FEED_OFFSET]
-    cmp qword[r8 + FEED_FIRST_OFFSET],0
-    je .return
+    cmp byte [r14 + r13], 1
+    je return0 
 
-    mov r14, r8 ;publicacion actual
-    mov r15, [r12 + USUARIO_ID_OFFSET] ;id_usuario
+    mov byte [r14 + r13], 1
+    xor rbx,rbx ;suma = 0
 
-    xor r10,r10 ;contador de tuits
-.while:
+    mov rsi, [r12 + MAP_HABITACIONES_OFFSET]
+    mov rax, r13
+    imul rax,rax,HAB_SIZE
+    lea r10,[rsi + rax] ;r10 = puntero a mapa->habitaciones[actual]
 
-    cmp r14,0
-    je .returnContador
+    cmp byte [r10 + HAB_CONTENIDO_OFFSET + CONT_ES_TESORO_OFFSET], 1
+    jne bucle_vecinos
 
-    mov rbx, [r14 + PUBLICACION_VALUE_OFFSET] ;puntero al tuit
+    add ebx, dword[r10 + HAB_CONTENIDO_OFFSET + CONT_VALOR_OFFSET]
 
-    cmp rbx,0
-    je .sigIteracion
+bucle_vecinos:
 
-    cmp dword[rbx + TUIT_ID_AUTOR_OFFSET],r15d
-    jne .sigIteracion
+    xor r15,r15
 
-    jmp .aplicarFuncion
+for: 
+    cmp r15,4
+    jae fin  ;r15 >= 4
 
-.aplicarFuncion:
-    mov rdi, rbx
-    call r13
-    cmp al,1
-    jne .sigIteracion
-    inc r10
+    mov rsi, [r12 + MAP_HABITACIONES_OFFSET]
+    mov rax, r13
+    imul rax, rax, HAB_SIZE
+    lea r10, [rsi + rax]
 
-.sigIteracion:
-    mov r14, [r14 + PUBLICACION_NEXT_OFFSET]
-    jmp .while
+    lea r11, [r10 + HAB_VECINOS_OFFSET]
+    mov r8d, dword[r11 + r15*4] ;edi = idVecino
 
-.returnContador:
-    mov eax,r10d
-    jmp .fin
-.return:
-    mov rax,0
-.fin:       ; Devolver el contador (r14d se extiende a rax automáticamente)
+    mov rdi,r12
+    mov rsi,r8
+    mov rdx,r14
+
+    call sumarTesoros
+
+    add ebx,eax
+
+    inc r15
+    jmp for
+
+return0: 
+    xor ebx,ebx
+fin:
+    mov eax,ebx
+    add rsp,8
+    pop rbx
     pop r15
     pop r14
     pop r13
     pop r12
-    pop rbx
     pop rbp
     ret
+    

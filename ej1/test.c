@@ -1,274 +1,215 @@
-#include <stdbool.h>
+/* tests.c para el ejercicio 1: encontrarTesoroEnMapa.
+ * Tests del Ejercicio 1 usando estructuras en heap (malloc/free)
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 
-#define WITH_ABI_MESSAGE
 #include "../ejs.h"
 #include "../utils.h"
 
-TEST(test_ej1_publicar_sin_seguidores) {
-  usuario_t user = crear_usuario(42);
-  usuario_t user_copy = clonar_usuario(&user);
-  char *mensaje = "Mi primer tuit";
+/* --- Declaraciones de funciones existentes en tu código (extern) --- */
 
-  tuit_t *result1 = TEST_CALL_S(publicar, mensaje, &user);
 
-  TEST_ASSERT(result1 != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, 42, result1->id_autor);
-  TEST_ASSERT(strcmp(result1->mensaje, mensaje) == 0);
-  TEST_ASSERT_EQUALS(uint32_t, 0, result1->favoritos);
-  TEST_ASSERT_EQUALS(uint32_t, 0, result1->retuits);
-  TEST_ASSERT(user.feed != NULL);
-  TEST_ASSERT(user.feed->first != NULL);
-  TEST_ASSERT(result1 == user.feed->first->value);
+extern Mapa crearMapaEjemplo(void);
+extern Mapa crearMapaEjemplo2(void);
+extern Mapa crearMapaTesoros(void);
+extern void liberarMapa(Mapa *m); 
 
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, true));
+/* --- Helpers locales: clonación profunda / constructores en heap --- */
 
-  free(result1);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+/* Clona (deep copy) el array de habitaciones y el struct Mapa en heap.
+   uso memcpy porque mi estructura habitaciòn no tiene punteros !
+ */
+
+static Mapa *mapa_clone_and_alloc(const Mapa *src) {
+    if (!src) return NULL;
+    Mapa *dst = malloc(sizeof(Mapa));
+    if (!dst) return NULL;
+    dst->n_habitaciones = src->n_habitaciones;
+    dst->id_entrada = src->id_entrada;
+
+    if (src->n_habitaciones == 0 || src->habitaciones == NULL) {
+        dst->habitaciones = NULL;
+        return dst;
+    }
+
+    dst->habitaciones = malloc(sizeof(Habitacion) * src->n_habitaciones);
+    if (!dst->habitaciones) { free(dst); return NULL; }
+
+    /* Copiamos cada Habitacion por memcpy */
+    for (uint64_t i = 0; i < src->n_habitaciones; ++i) {
+        memcpy(&dst->habitaciones[i], &src->habitaciones[i], sizeof(Habitacion));
+    }
+    return dst;
 }
 
-TEST(test_ej1_publicar_con_seguidor) {
-  usuario_t autor = crear_usuario(100);
-  
-  usuario_t seg1 = crear_usuario(200);
-  
-  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.cantSeguidores++;
-
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
-
-  char *mensaje = "Nuevo tuit del autor";
-  tuit_t *result2 = TEST_CALL_S(publicar, mensaje, &autor);
-
-  TEST_ASSERT(result2 != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, autor.id, result2->id_autor);
-  TEST_ASSERT(strcmp(result2->mensaje, mensaje) == 0);
-  TEST_ASSERT(autor.seguidores[0]->feed != NULL);
-  TEST_ASSERT(autor.seguidores[0]->feed->first != NULL);
-  TEST_ASSERT(result2 == autor.seguidores[0]->feed->first->value);
-
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
-
-  free(result2);
-
-  liberar_usuario(&seg1);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&autor);
-  liberar_usuario(&autor_copy);
+/* Libera el Mapa creado por mapa_clone_and_alloc */
+static void mapa_free_local(Mapa *m) {
+    if (!m) return;
+    if (m->habitaciones) {
+        free(m->habitaciones);
+        m->habitaciones = NULL;
+    }
+    free(m);
 }
 
-TEST(test_ej1_publicar_clonado_mensaje) {
-  usuario_t user = crear_usuario(123);
-  char mensaje[] = "Mensaje original";
-
-  usuario_t user_copy = clonar_usuario(&user);
-
-  tuit_t *result3 = TEST_CALL_S(publicar, mensaje, &user);
-
-  TEST_ASSERT(result3 != NULL);
-
-  mensaje[0] = 'X';
-
-  TEST_ASSERT_EQUALS(uint32_t, user.id, result3->id_autor);
-  TEST_ASSERT(strcmp(result3->mensaje, "Mensaje original") == 0);
-  TEST_ASSERT(user.feed != NULL);
-  TEST_ASSERT(user.feed->first != NULL);
-  TEST_ASSERT(result3 == user.feed->first->value);
-
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, true));
-
-  free(result3);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+/* Crea un Recorrido en heap copiando el array de Accion */
+static Recorrido *recorrido_new_from_array(const Accion *acciones, uint64_t n) {
+    Recorrido *r = malloc(sizeof(Recorrido));
+    if (!r) return NULL;
+    r->cant_acciones = n;
+    if (n == 0) {
+        r->acciones = NULL;
+        return r;
+    }
+    r->acciones = malloc(sizeof(Accion) * n);
+    if (!r->acciones) { free(r); return NULL; }
+    memcpy(r->acciones, acciones, sizeof(Accion) * n);
+    return r;
 }
 
-TEST(test_ej1_publicar_dos_seguidores) {
-  usuario_t autor = crear_usuario(10);
-  usuario_t seg1 = crear_usuario(20);
-  usuario_t seg2 = crear_usuario(30);
-
-  autor.seguidores = (usuario_t **)malloc(2 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.seguidores[1] = &seg2;
-  autor.cantSeguidores = 2;
-
-  char *mensaje = "Hola a todos";
-
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
-  usuario_t seg2_copy = clonar_usuario(&seg2);
-
-  tuit_t *result4 = TEST_CALL_S(publicar, mensaje, &autor);
-
-  TEST_ASSERT_EQUALS(uint32_t, 10, result4->id_autor);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(autor.feed != NULL);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(result4 == autor.feed->first->value);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(seg1.feed != NULL);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(result4 == seg1.feed->first->value);
-  TEST_ASSERT(seg2.feed != NULL);
-  TEST_ASSERT(seg2.feed->first != NULL);
-  TEST_ASSERT(result4 == seg2.feed->first->value);
-
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg2, &seg2_copy, false, true, true, true));
-
-
-  free(result4);
-  liberar_usuario(&seg1);
-  liberar_usuario(&seg2);
-  liberar_usuario(&autor);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&seg2_copy);
-  liberar_usuario(&autor_copy);
+static void recorrido_free_local(Recorrido *r) {
+    if (!r) return;
+    if (r->acciones) {
+        free(r->acciones);
+        r->acciones = NULL;
+    }
+    free(r);
 }
 
-TEST(test_ej1_publicar_inserta_al_principio) {
-  usuario_t autor = crear_usuario(1);
+/* Wrappers que adaptan tus funciones que devuelven Mapa por valor a Mapa* en heap.
 
-  usuario_t seg1 = crear_usuario(2);
+ * Lógica:
+ *   1) llamamos a crearMapaX() que posiblemente asigna habitaciones y devuelve un Mapa por valor
+ *   2) clonamos a heap (mapa_clone_and_alloc)
+ *   3) liberamos el Mapa temporal usando la función original liberarMapa(&tmp) para no filtrar memoria
+ *   4) retornamos el Mapa* en heap al caller
+ */
 
-  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.cantSeguidores = 1;
 
-  tuit_t *t = crear_tuit("viejo", 0, 0, 999);
-
-  agregar_publicacion(&seg1, crear_publicacion(t));
-
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
-
-  tuit_t *result5 = TEST_CALL_S(publicar, "nuevo", &autor);
-  
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(autor.feed != NULL);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(result5 == autor.feed->first->value);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(seg1.feed != NULL);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(result5 == seg1.feed->first->value);
-  TEST_ASSERT(strcmp(result5->mensaje, "nuevo") == 0);
-
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
-
-  free(t);
-  free(result5);
-  liberar_usuario(&seg1);
-  liberar_usuario(&autor);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&autor_copy);
+static Mapa *crearMapaEjemplo_heap(void) {
+    Mapa tmp = crearMapaEjemplo();
+    Mapa *m = mapa_clone_and_alloc(&tmp);
+    liberarMapa(&tmp);
+    return m;
 }
 
-TEST(test_ej1_publicar_doble_orden) {
-  usuario_t autor = crear_usuario(7);
-  usuario_t seg1 = crear_usuario(8);
-
-  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.cantSeguidores = 1;
-
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
-
-
-  tuit_t *t1 = TEST_CALL_S(publicar, "uno", &autor);
-  tuit_t *t2 = TEST_CALL_S(publicar, "dos", &autor);
-
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(autor.feed != NULL);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(t2 == autor.feed->first->value);
-  TEST_ASSERT(autor.feed->first->next != NULL);
-  TEST_ASSERT(t1 == autor.feed->first->next->value);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(seg1.feed != NULL);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(t2 == seg1.feed->first->value);
-  TEST_ASSERT(seg1.feed->first->next != NULL);
-  TEST_ASSERT(t1 == seg1.feed->first->next->value);
-  TEST_ASSERT(strcmp(t2->mensaje, "dos") == 0);
-  TEST_ASSERT(strcmp(t1->mensaje, "uno") == 0);
-
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
-
-  free(t1);
-  free(t2);
-
-  liberar_usuario(&seg1);
-  liberar_usuario(&autor);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&autor_copy);
+static Mapa *crearMapaEjemplo2_heap(void) {
+    Mapa tmp = crearMapaEjemplo2();
+    Mapa *m = mapa_clone_and_alloc(&tmp);
+    liberarMapa(&tmp);
+    return m;
 }
 
-TEST(test_ej1_publicar_dos_autores_mismo_seguidor) {
-  usuario_t a1 = crear_usuario(91);
-  usuario_t a2 = crear_usuario(92);
-
-  usuario_t seg = crear_usuario(93);
-  seg.seguidores = NULL;
-  seg.seguidos = (usuario_t **)malloc(2 * sizeof(usuario_t*));
-  seg.bloqueados = NULL;
-
-  a1.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  a2.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  a1.seguidores[0] = &seg;
-  a2.seguidores[0] = &seg;
-  a1.cantSeguidores = 1;
-  a2.cantSeguidores = 1;
-
-  usuario_t a1_copy = clonar_usuario(&a1);
-  usuario_t a2_copy = clonar_usuario(&a2);
-  usuario_t seg_copy = clonar_usuario(&seg);
-
-  tuit_t *t1 = TEST_CALL_S(publicar, "A", &a1);
-  tuit_t *t2 = TEST_CALL_S(publicar, "B", &a2);
-
-  TEST_ASSERT(seg.feed->first != NULL);
-  TEST_ASSERT(seg.feed != NULL);
-  TEST_ASSERT(seg.feed->first != NULL);
-  TEST_ASSERT(t2 == seg.feed->first->value);
-  TEST_ASSERT(seg.feed->first->next != NULL);
-  TEST_ASSERT(t1 == seg.feed->first->next->value);
-  TEST_ASSERT(strcmp(t2->mensaje, "B") == 0);
-  TEST_ASSERT(strcmp(t1->mensaje, "A") == 0);
-
-  TEST_ASSERT(usuarios_iguales(&a1, &a1_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&a2, &a2_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg, &seg_copy, false, true, true, true));
-
-  free(t1);
-  free(t2);
-  liberar_usuario(&seg);
-  liberar_usuario(&a1);
-  liberar_usuario(&a2);
-  liberar_usuario(&seg_copy);
-  liberar_usuario(&a1_copy);
-  liberar_usuario(&a2_copy);
+static Mapa *crearMapaTesoros_heap(void) {
+    Mapa tmp = crearMapaTesoros();
+    Mapa *m = mapa_clone_and_alloc(&tmp);
+    liberarMapa(&tmp);
+    return m;
 }
 
+/* --- Tests pero ahora adaptados a la estructura en heap --- */
+
+TEST(test_ej1_mapa_simple_recorrido_invalido_y_no_encuentra_tesoro) {
+  Mapa *mapa = crearMapaEjemplo_heap();
+  TEST_ASSERT(mapa != NULL);
+
+  Accion acciones_temp[] = { ACC_OESTE, ACC_SUR };
+  Recorrido *rec = recorrido_new_from_array(acciones_temp, 2);
+  TEST_ASSERT(rec != NULL);
+
+  uint64_t acciones_ejecutadas = 0;
+  bool found = TEST_CALL_B(encontrarTesoroEnMapa, mapa, rec, &acciones_ejecutadas);
+  TEST_ASSERT(acciones_ejecutadas == 0);
+  TEST_ASSERT(!found);
+
+  recorrido_free_local(rec);
+  mapa_free_local(mapa);
+}
+
+TEST(test_ej1_mapa_simple_recorrido_valido_y_no_encuentra_tesoro) {
+  Mapa *mapa = crearMapaEjemplo_heap();
+  TEST_ASSERT(mapa != NULL);
+
+  Accion acciones_temp[] = { ACC_ESTE };
+  Recorrido *rec = recorrido_new_from_array(acciones_temp, 1);
+  TEST_ASSERT(rec != NULL);
+
+  uint64_t acciones_ejecutadas = 0;
+  bool found = TEST_CALL_B(encontrarTesoroEnMapa, mapa, rec, &acciones_ejecutadas);
+  TEST_ASSERT(acciones_ejecutadas == 1);
+  TEST_ASSERT(!found);
+
+  recorrido_free_local(rec);
+  mapa_free_local(mapa);
+}
+
+TEST(test_ej1_mapa_simple_encuentro_tesoro) {
+  Mapa *mapa = crearMapaEjemplo_heap();
+  TEST_ASSERT(mapa != NULL);
+
+  Accion acciones_temp[] = { ACC_ESTE, ACC_NORTE };
+  Recorrido *rec = recorrido_new_from_array(acciones_temp, 2);
+  TEST_ASSERT(rec != NULL);
+
+  uint64_t acciones_ejecutadas = 0;
+  bool found = TEST_CALL_B(encontrarTesoroEnMapa, mapa, rec, &acciones_ejecutadas);
+  TEST_ASSERT(acciones_ejecutadas == 2);
+  TEST_ASSERT(found);
+
+  recorrido_free_local(rec);
+  mapa_free_local(mapa);
+}
+
+TEST(test_ej1_mapa_sin_tesoro_no_encuentro_tesoro) {
+  Mapa *mapa = crearMapaEjemplo2_heap();
+  TEST_ASSERT(mapa != NULL);
+
+  Accion acciones_temp[] = { ACC_ESTE, ACC_NORTE };
+  Recorrido *rec = recorrido_new_from_array(acciones_temp, 2);
+  TEST_ASSERT(rec != NULL);
+
+  uint64_t acciones_ejecutadas = 0;
+  bool found = TEST_CALL_B(encontrarTesoroEnMapa, mapa, rec, &acciones_ejecutadas);
+  (void)acciones_ejecutadas;
+  TEST_ASSERT(!found);
+
+  recorrido_free_local(rec);
+  mapa_free_local(mapa);
+}
+
+TEST(test_ej1_mapa_muchos_tesoros_encuentro_1_con_recorrido_largo) {
+  Mapa *mapa = crearMapaTesoros_heap();
+  TEST_ASSERT(mapa != NULL);
+
+  Accion acciones_temp[] = { ACC_ESTE, ACC_NORTE, ACC_OESTE };
+  Recorrido *rec = recorrido_new_from_array(acciones_temp, 3);
+  TEST_ASSERT(rec != NULL);
+
+  uint64_t acciones_ejecutadas = 0;
+  bool found = TEST_CALL_B(encontrarTesoroEnMapa, mapa, rec, &acciones_ejecutadas);
+  TEST_ASSERT(found);
+  TEST_ASSERT(acciones_ejecutadas == 1);
+
+  recorrido_free_local(rec);
+  mapa_free_local(mapa);
+}
+
+/* --- main --- */
 int main(int argc, char *argv[]) {
-  printf("Corriendo los tests del ejercicio 1...\n");
+  (void)argc; (void)argv;
+  printf("Corriendo los tests del ejercicio 1 ...\n");
 
-  test_ej1_publicar_sin_seguidores();
-  test_ej1_publicar_con_seguidor();
-  test_ej1_publicar_clonado_mensaje();
-  test_ej1_publicar_dos_seguidores();
-  test_ej1_publicar_inserta_al_principio();
-  test_ej1_publicar_doble_orden();
-  test_ej1_publicar_dos_autores_mismo_seguidor();
+  test_ej1_mapa_simple_recorrido_invalido_y_no_encuentra_tesoro();
+  test_ej1_mapa_simple_recorrido_valido_y_no_encuentra_tesoro();
+  test_ej1_mapa_simple_encuentro_tesoro();
+  test_ej1_mapa_sin_tesoro_no_encuentro_tesoro();
+  test_ej1_mapa_muchos_tesoros_encuentro_1_con_recorrido_largo();
 
-  tests_end("Ejercicio 1");
+  tests_end("Ejercicio 1 ");
+  return 0;
 }

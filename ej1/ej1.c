@@ -1,34 +1,32 @@
 #include "../ejs.h"
 #include <string.h>
 
-// Función principal: publicar un tuit
-tuit_t *publicar(char *mensaje, usuario_t *user) {
-  tuit_t* nuevaPub = malloc(sizeof(tuit_t));
+bool encontrarTesoroEnMapa(Mapa *mapa, Recorrido *rec, uint64_t *acciones_ejecutadas) {
+    if (mapa == NULL || rec == NULL) {
+        return false;
+    }
+    *acciones_ejecutadas = 0;
 
-  nuevaPub->id_autor = user->id;
-  nuevaPub->favoritos = 0;
-  nuevaPub->retuits = 0;
+    uint32_t idHabActual = mapa->id_entrada;
 
-  strcpy(nuevaPub->mensaje,mensaje);
+    if (mapa->habitaciones[idHabActual].contenido.es_tesoro) {
+        return true;
+    }
+    
+    for (uint64_t i = 0; i < rec->cant_acciones; i++) {
 
-  agregar_al_feed(nuevaPub, user->feed);
+        Accion proxAccion = rec->acciones[i];
+        uint32_t idVecino = mapa->habitaciones[idHabActual].vecinos[proxAccion];
+ 
+        if (idVecino == 99) {
+            return false;
+        }
+        idHabActual = idVecino;
+        *acciones_ejecutadas += 1;
 
-  for (int i = 0; i < user->cantSeguidores; i++)
-  {
-    usuario_t* seguidor_actual = user->seguidores[i];
-    agregar_al_feed(nuevaPub, seguidor_actual->feed);
-  }  
-  return nuevaPub;
-  
-}
-
-
-void agregar_al_feed(tuit_t* tuit, feed_t* feed)
-{
-  publicacion_t* nuevaPub = malloc(sizeof(publicacion_t));
-
-  nuevaPub->value = tuit;
-  nuevaPub->next = feed->first;
-
-  feed->first = nuevaPub;
+        if (mapa->habitaciones[idHabActual].contenido.es_tesoro) {
+            return true;
+        }
+    }
+    return false;
 }
