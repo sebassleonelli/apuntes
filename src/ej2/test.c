@@ -7,421 +7,352 @@
 #include "../ejs.h"
 #include "../utils.h"
 
-TEST(test_ej2_bloquear_basico) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_lista_vacia) {
+  catalogo_t catalogo1 = {NULL};
+  catalogo_t *result1 = TEST_CALL_S(removerCopias, &catalogo1);
+  int count1 = contar_nodos(result1);
 
-  // Feed de user: a -> b -> a
-  tuit_t *t1 = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
-
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
-
-  // Bloqueo a 'a' y debe borrar t1 y t3. Y t4 de a
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
-
-  tuit_t *rem = obtener_tuit_en_posicion(user.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("chau", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t2);
-
-  rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  TEST_ASSERT_EQUALS(int, 0, count1);
+  TEST_ASSERT(result1 == &catalogo1);
 }
 
-TEST(test_ej2_bloquear_sin_coincidencias) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_sin_duplicados) {
+  catalogo_t catalogo2 = {NULL};
 
+  usuario_t *u1 = crear_usuario(1, 1);
+  usuario_t *u2 = crear_usuario(2, 1);
 
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, b.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, b.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 15);
+  producto_t *item2 = crear_item(u2, "hogar", "mesa", 1, 200, 11);
 
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3_copy = crear_tuit("otra", 0, 0, b.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, b.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, b.id);
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 15);
+  producto_t *item2copy = crear_item(u2, "hogar", "mesa", 1, 200, 11);
 
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  agregar_nodo(&catalogo2, crear_nodo(item1));
+  agregar_nodo(&catalogo2, crear_nodo(item2));
 
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
+  int count_inicial = contar_nodos(&catalogo2);
+  catalogo_t *result2 = TEST_CALL_S(removerCopias, &catalogo2);
+  int count_final = contar_nodos(result2);
 
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
+  TEST_ASSERT_EQUALS(int, count_inicial, count_final);
+  TEST_ASSERT(result2 == &catalogo2);
+  TEST_ASSERT(!tiene_duplicados(result2));
 
-  TEST_CALL_V(bloquearUsuario, &user, &a);
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
 
-  TEST_ASSERT_EQUALS(int32_t, 2, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 2, contar_publicaciones(a.feed));
+  free(item1copy);
+  free(item2copy);
 
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
+  free(item1);
+  free(item2);
 
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, true, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
+  free(u1);
+  free(u2);
 
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t3, t3_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t3_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  liberar_lista(&catalogo2);
 }
 
-TEST(test_ej2_bloquear_todas_coincidencias) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
+TEST(test_ej2_duplicados) {
+  catalogo_t catalogo3 = {NULL};
 
-  // Feed de user: a -> b -> a
-  tuit_t *t1 = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2 = crear_tuit("chau", 0, 0, a.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, user.id);
+  usuario_t *u1 = crear_usuario(1, 1);
 
-  tuit_t *t1_copy = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, a.id);
-  tuit_t *t3_copy = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, user.id);
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 1);
+  producto_t *item2 = crear_item(u1, "electro", "celular", 0, 600,
+                                 2); // mismo nombre y usuario ID
 
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 1);
 
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
+  producto_t *res[1] = {item1};
 
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
+  agregar_nodo(&catalogo3, crear_nodo(item1));
+  agregar_nodo(&catalogo3, crear_nodo(item2));
 
-  TEST_CALL_V(bloquearUsuario, &user, &a);
+  catalogo_t *result3 = TEST_CALL_S(removerCopias, &catalogo3);
+  int count3 = contar_nodos(result3);
 
-  TEST_ASSERT_EQUALS(int32_t, 0, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 0, contar_publicaciones(a.feed));
+  TEST_ASSERT_EQUALS(int, 1, count3);
+  TEST_ASSERT(item_en_lista(res, 1, result3->first->value)); 
+  TEST_ASSERT(!tiene_duplicados(result3));                   
 
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
 
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
+  free(item1copy);
+  free(result3->first->value);
 
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t3, t3_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t1_copy);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t3_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-
-  liberar_usuario(&user);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&a_copy);
+  liberar_lista(&catalogo3);
+  free(u1);
 }
 
-TEST(test_ej2_solo_feed_bloqueado) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_diferente_usuario) {
 
-  // Feed de user: a -> b -> a
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
+  catalogo_t catalogo4 = {NULL};
 
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  usuario_t *u1 = crear_usuario(1, 1);
+  usuario_t *u2 = crear_usuario(2, 1); // diferente ID
 
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 123);
+  producto_t *item2 = crear_item(u2, "electro", "celular", 1, 600,
+                                 321); // mismo nombre, diferente usuario
 
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 123);
+  producto_t *item2copy = crear_item(u2, "electro", "celular", 1, 600,
+                                     321); // mismo nombre, diferente usuario
 
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
+  agregar_nodo(&catalogo4, crear_nodo(item1));
+  agregar_nodo(&catalogo4, crear_nodo(item2));
 
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, b.id);
+  catalogo_t *result4 = TEST_CALL_S(removerCopias, &catalogo4);
+  int count4 = contar_nodos(result4);
 
-  TEST_CALL_V(bloquearUsuario, &user, &a);
+  TEST_ASSERT_EQUALS(int, 2, count4);
 
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
 
-  tuit_t *rem = obtener_tuit_en_posicion(user.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("chau", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t2);
+  free(item1copy);
+  free(item2copy);
 
-  rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
+  free(item1);
+  free(item2);
 
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
+  free(u1);
+  free(u2);
 
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, true, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t2);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  liberar_lista(&catalogo4);
 }
 
-TEST(test_ej2_bloquear_solo_feed_bloqueador) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_diferente_nombre) {
+  catalogo_t catalogo5 = {NULL};
 
-  // Feed de user: a -> b -> a
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, a.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
+  usuario_t *u1 = crear_usuario(1, 1);
 
-  user.bloqueados = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 3);
+  producto_t *item2 = crear_item(u1, "electro", "tablet", 1, 600,
+                                 5); // diferente nombre, mismo usuario
 
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 3);
+  producto_t *item2copy = crear_item(u1, "electro", "tablet", 1, 600,
+                                     5); // diferente nombre, mismo usuario
 
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
+  agregar_nodo(&catalogo5, crear_nodo(item1));
+  agregar_nodo(&catalogo5, crear_nodo(item2));
 
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
+  catalogo_t *result5 = TEST_CALL_S(removerCopias, &catalogo5);
+  int count5 = contar_nodos(result5);
 
-  tuit_t *t2_copy = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t4_copy = crear_tuit("buenas", 0, 0, a.id);
-  tuit_t *t5_copy = crear_tuit("buenas buenas", 0, 0, b.id);
+  TEST_ASSERT_EQUALS(int, 2, count5);
 
-  TEST_CALL_V(bloquearUsuario, &user, &a);
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
 
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
+  free(item1copy);
+  free(item2copy);
 
-  tuit_t *rem = obtener_tuit_en_posicion(user.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("chau", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t2);
+  free(item1);
+  free(item2);
 
-  rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
-
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 1);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &a);
-
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, true, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, true, true, true, true));
-
-  TEST_ASSERT(tuits_iguales(t2, t2_copy));
-  TEST_ASSERT(tuits_iguales(t4, t4_copy));
-  TEST_ASSERT(tuits_iguales(t5, t5_copy));
-
-  liberar_tuit(t2);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t2_copy);
-  liberar_tuit(t4_copy);
-  liberar_tuit(t5_copy);
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  free(u1);
+  liberar_lista(&catalogo5);
 }
 
-TEST(test_ej2_bloquear_bloqueos_multiples) {
-  usuario_t user = crear_usuario(10);
-  usuario_t a = crear_usuario(100);
-  usuario_t b = crear_usuario(200);
+TEST(test_ej2_multiples) {
+  catalogo_t catalogo6 = {NULL};
 
-  // Feed de user: a -> b -> a
-  tuit_t *t1 = crear_tuit("hola", 0, 0, a.id);
-  tuit_t *t2 = crear_tuit("chau", 0, 0, b.id);
-  tuit_t *t3 = crear_tuit("otra", 0, 0, a.id);
-  tuit_t *t4 = crear_tuit("buenas", 0, 0, user.id);
-  tuit_t *t5 = crear_tuit("buenas buenas", 0, 0, b.id);
-  tuit_t *t6 = crear_tuit("ay ay ay ay", 0, 0, user.id);
-  tuit_t *t7 = crear_tuit("canta y no llores", 0, 0, a.id);
-  
+  usuario_t *u1 = crear_usuario(1, 1);
+  usuario_t *u2 = crear_usuario(2, 1);
 
-  user.bloqueados = (usuario_t **)malloc(2 * sizeof(usuario_t*));
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 1);
+  producto_t *item2 =
+      crear_item(u1, "electro", "celular", 0, 600, 2); // duplicado
+  producto_t *item3 =
+      crear_item(u1, "electro", "celular", 1, 700, 3);            // duplicado
+  producto_t *item4 = crear_item(u2, "hogar", "mesa", 1, 200, 4); // diferente
 
-  agregar_publicacion(&user, crear_publicacion(t1));
-  agregar_publicacion(&user, crear_publicacion(t2));
-  agregar_publicacion(&user, crear_publicacion(t3));
-  agregar_publicacion(&a, crear_publicacion(t4));
-  agregar_publicacion(&a, crear_publicacion(t5));
-  agregar_publicacion(&b, crear_publicacion(t6));
-  agregar_publicacion(&b, crear_publicacion(t7));
+  producto_t *res[3] = {item1, item3, item4};
 
-  usuario_t user_copy = clonar_usuario(&user);
-  usuario_t a_copy = clonar_usuario(&a);
-  usuario_t b_copy = clonar_usuario(&b);
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 1);
+  producto_t *item4copy =
+      crear_item(u2, "hogar", "mesa", 1, 200, 4); // diferente
 
-  TEST_CALL_V(bloquearUsuario, &user, &a);
-  TEST_CALL_V(bloquearUsuario, &user, &b);
+  agregar_nodo(&catalogo6, crear_nodo(item1));
+  agregar_nodo(&catalogo6, crear_nodo(item2));
+  agregar_nodo(&catalogo6, crear_nodo(item3));
+  agregar_nodo(&catalogo6, crear_nodo(item4));
 
-  // Queda solo el de 'b'
-  TEST_ASSERT_EQUALS(int32_t, 0, contar_publicaciones(user.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(a.feed));
-  TEST_ASSERT_EQUALS(int32_t, 1, contar_publicaciones(b.feed));
+  catalogo_t *result6 = TEST_CALL_S(removerCopias, &catalogo6);
+  int count6 = contar_nodos(result6);
 
-  tuit_t* rem = obtener_tuit_en_posicion(a.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, b.id, rem->id_autor);
-  TEST_ASSERT(strcmp("buenas buenas", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t5);
+  TEST_ASSERT_EQUALS(int, 2, count6);
+  TEST_ASSERT(item_en_lista(res, 3, result6->first->value));
+  TEST_ASSERT(item_en_lista(res, 3, result6->first->next->value));
+  TEST_ASSERT(!tiene_duplicados(result6));
 
-  rem = obtener_tuit_en_posicion(b.feed, 0);
-  TEST_ASSERT(rem != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, a.id, rem->id_autor);
-  TEST_ASSERT(strcmp("canta y no llores", rem->mensaje) == 0);
-  TEST_ASSERT(rem == t7);
+  TEST_ASSERT(verificarIntegridad(result6->first->value, item1copy));
+  TEST_ASSERT(verificarIntegridad(result6->first->next->value, item4copy));
 
-  // bloqueados: a debe estar último
-  TEST_ASSERT(user.cantBloqueados = user_copy.cantBloqueados + 2);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 1] == &b);
-  TEST_ASSERT(user.bloqueados[user.cantBloqueados - 2] == &a);
+  free(item1copy);
+  free(item4copy);
 
-  // No se debe haber modificado nada más
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, false));
-  TEST_ASSERT(usuarios_iguales(&a, &a_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&b, &b_copy, false, true, true, true));
+  free(result6->first->value);
+  free(result6->first->next->value);
 
-  liberar_tuit(t1);
-  liberar_tuit(t2);
-  liberar_tuit(t3);
-  liberar_tuit(t4);
-  liberar_tuit(t5);
-  liberar_tuit(t6);
-  liberar_tuit(t7);
-  
-  liberar_usuario(&user);
-  liberar_usuario(&b);
-  liberar_usuario(&a);
-  liberar_usuario(&user_copy);
-  liberar_usuario(&b_copy);
-  liberar_usuario(&a_copy);
+  free(u1);
+  free(u2);
+  liberar_lista(&catalogo6);
+}
+
+TEST(test_ej2_usuario_multiples_items_sin_duplicados) {
+  catalogo_t catalogo = {NULL};
+
+  usuario_t *u1 = crear_usuario(1, 1);
+  usuario_t *u2 = crear_usuario(2, 0);
+
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 10);
+  producto_t *item2 = crear_item(u1, "electro", "tablet", 1, 300, 5);
+  producto_t *item3 = crear_item(u1, "hogar", "mesa", 0, 150, 3);
+  producto_t *item4 = crear_item(u2, "ropa", "camisa", 1, 50, 20);
+  producto_t *item5 = crear_item(u2, "ropa", "pantalon", 0, 80, 15);
+
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 10);
+  producto_t *item2copy = crear_item(u1, "electro", "tablet", 1, 300, 5);
+  producto_t *item3copy = crear_item(u1, "hogar", "mesa", 0, 150, 3);
+  producto_t *item4copy = crear_item(u2, "ropa", "camisa", 1, 50, 20);
+  producto_t *item5copy = crear_item(u2, "ropa", "pantalon", 0, 80, 15);
+
+  agregar_nodo(&catalogo, crear_nodo(item1));
+  agregar_nodo(&catalogo, crear_nodo(item2));
+  agregar_nodo(&catalogo, crear_nodo(item3));
+  agregar_nodo(&catalogo, crear_nodo(item4));
+  agregar_nodo(&catalogo, crear_nodo(item5));
+
+  catalogo_t *result = TEST_CALL_S(removerCopias, &catalogo);
+  int count = contar_nodos(result);
+
+  TEST_ASSERT_EQUALS(int, 5, count); // Todos los items deben permanecer
+  TEST_ASSERT(!tiene_duplicados(result));
+
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
+  TEST_ASSERT(verificarIntegridad(item3, item3copy));
+  TEST_ASSERT(verificarIntegridad(item4, item4copy));
+  TEST_ASSERT(verificarIntegridad(item5, item5copy));
+
+  free(item1copy);
+  free(item2copy);
+  free(item3copy);
+  free(item4copy);
+  free(item5copy);
+
+  free(item1);
+  free(item2);
+  free(item3);
+  free(item4);
+  free(item5);
+
+  free(u1);
+  free(u2);
+  liberar_lista(&catalogo);
+}
+
+TEST(test_ej2_usuario_multiples_items_con_duplicados) {
+  catalogo_t catalogo = {NULL};
+
+  usuario_t *u1 = crear_usuario(1, 1);
+
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 10);
+  producto_t *item2 = crear_item(u1, "electro", "tablet", 1, 300, 5);
+  producto_t *item3 =
+      crear_item(u1, "electro", "celular", 0, 450, 8); // duplicado con item1
+  producto_t *item4 = crear_item(u1, "hogar", "mesa", 1, 150, 3);
+  producto_t *item5 =
+      crear_item(u1, "electro", "tablet", 1, 280, 7); // duplicado con item2
+
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 10);
+  producto_t *item2copy = crear_item(u1, "electro", "tablet", 1, 300, 5);
+  producto_t *item4copy = crear_item(u1, "hogar", "mesa", 1, 150, 3);
+
+  producto_t *res[5] = {item1, item2, item3, item4, item5};
+
+  agregar_nodo(&catalogo, crear_nodo(item1));
+  agregar_nodo(&catalogo, crear_nodo(item2));
+  agregar_nodo(&catalogo, crear_nodo(item3));
+  agregar_nodo(&catalogo, crear_nodo(item4));
+  agregar_nodo(&catalogo, crear_nodo(item5));
+
+  catalogo_t *result = TEST_CALL_S(removerCopias, &catalogo);
+  int count = contar_nodos(result);
+
+  TEST_ASSERT_EQUALS(int, 3, count); // item1, item2, item4 deben permanecer
+  TEST_ASSERT(item_en_lista(res, 5, result->first->value));
+  TEST_ASSERT(item_en_lista(res, 5, result->first->next->value));
+  TEST_ASSERT(item_en_lista(res, 5, result->first->next->next->value));
+  TEST_ASSERT(!tiene_duplicados(result));
+
+  TEST_ASSERT(verificarIntegridad(result->first->value, item1copy));
+  TEST_ASSERT(verificarIntegridad(result->first->next->value, item2copy));
+  TEST_ASSERT(verificarIntegridad(result->first->next->next->value, item4copy));
+
+  free(item1copy);
+  free(item2copy);
+  free(item4copy);
+
+  free(item1);
+  free(item2);
+  free(item4);
+
+  liberar_lista(&catalogo);
+  free(u1);
+}
+
+TEST(test_ej2_todos_duplicados) {
+  catalogo_t catalogo = {NULL};
+
+  usuario_t *u1 = crear_usuario(1, 1);
+
+  producto_t *item1 = crear_item(u1, "electro", "celular", 1, 500, 10);
+  producto_t *item2 = crear_item(u1, "electro", "celular", 0, 450, 8);
+  producto_t *item3 = crear_item(u1, "electro", "celular", 1, 520, 12);
+  producto_t *item4 = crear_item(u1, "electro", "celular", 0, 480, 6);
+
+  producto_t *item1copy = crear_item(u1, "electro", "celular", 1, 500, 10);
+
+  agregar_nodo(&catalogo, crear_nodo(item1));
+  agregar_nodo(&catalogo, crear_nodo(item2));
+  agregar_nodo(&catalogo, crear_nodo(item3));
+  agregar_nodo(&catalogo, crear_nodo(item4));
+
+  catalogo_t *result = TEST_CALL_S(removerCopias, &catalogo);
+  int count = contar_nodos(result);
+
+  producto_t *res[4] = {item1, item2, item3, item4};
+
+  TEST_ASSERT_EQUALS(int, 1, count);
+  TEST_ASSERT(item_en_lista(res, 4, result->first->value));
+  TEST_ASSERT(!tiene_duplicados(result));
+
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+
+  free(item1copy);
+  free(item1);
+  free(u1);
+
+  liberar_lista(&catalogo);
 }
 
 int main(int argc, char *argv[]) {
   printf("Corriendo los tests del ejercicio 2...\n");
-
-  test_ej2_bloquear_basico();
-  test_ej2_bloquear_sin_coincidencias();
-  test_ej2_bloquear_todas_coincidencias();
-  test_ej2_solo_feed_bloqueado();
-  test_ej2_bloquear_solo_feed_bloqueador();
-  test_ej2_bloquear_bloqueos_multiples();
+  test_ej2_lista_vacia();
+  test_ej2_sin_duplicados();
+  test_ej2_duplicados();
+  test_ej2_diferente_usuario();
+  test_ej2_diferente_nombre();
+  test_ej2_multiples();
+  test_ej2_usuario_multiples_items_sin_duplicados();
+  test_ej2_usuario_multiples_items_con_duplicados();
+  test_ej2_todos_duplicados();
 
   tests_end("Ejercicio 2");
 }

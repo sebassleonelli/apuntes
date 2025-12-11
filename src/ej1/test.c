@@ -1,274 +1,323 @@
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
+#include <stdlib.h>
 
 #define WITH_ABI_MESSAGE
 #include "../ejs.h"
 #include "../utils.h"
 
-TEST(test_ej1_publicar_sin_seguidores) {
-  usuario_t user = crear_usuario(42);
-  usuario_t user_copy = clonar_usuario(&user);
-  char *mensaje = "Mi primer tuit";
+TEST(test_ej1_lista_vacia) {
+  catalogo_t catalogo1 = {NULL};
+  producto_t *result1 =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo1);
+  int count1 = contar_items_resultado(result1);
 
-  tuit_t *result1 = TEST_CALL_S(publicar, mensaje, &user);
+  TEST_ASSERT_EQUALS(int, 0, count1);
 
-  TEST_ASSERT(result1 != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, 42, result1->id_autor);
-  TEST_ASSERT(strcmp(result1->mensaje, mensaje) == 0);
-  TEST_ASSERT_EQUALS(uint32_t, 0, result1->favoritos);
-  TEST_ASSERT_EQUALS(uint32_t, 0, result1->retuits);
-  TEST_ASSERT(user.feed != NULL);
-  TEST_ASSERT(user.feed->first != NULL);
-  TEST_ASSERT(result1 == user.feed->first->value);
-
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, true));
-
-  free(result1);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+  if (result1)
+    free(result1);
 }
 
-TEST(test_ej1_publicar_con_seguidor) {
-  usuario_t autor = crear_usuario(100);
-  
-  usuario_t seg1 = crear_usuario(200);
-  
-  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.cantSeguidores++;
+TEST(test_ej1_niveles) {
+  catalogo_t catalogo2 = {NULL};
 
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
+  usuario_t *u1 = crear_usuario(1, 0); // nivel 0
+  usuario_t *u2 = crear_usuario(2, 1); // nivel 1
+  usuario_t *u3 = crear_usuario(3, 2); // nivel 2
 
-  char *mensaje = "Nuevo tuit del autor";
-  tuit_t *result2 = TEST_CALL_S(publicar, mensaje, &autor);
+  producto_t *item1 =
+      crear_item(u1, "electro", "celular", 1, 500, 32); // nivel 0, nuevo -> NO
+  producto_t *item2 =
+      crear_item(u2, "hogar", "mesa", 1, 200, 2); // nivel 1, nuevo -> SÍ
+  producto_t *item3 =
+      crear_item(u3, "ropa", "camisa", 1, 100, 1); // nivel 2, nuevo -> SÍ
 
-  TEST_ASSERT(result2 != NULL);
-  TEST_ASSERT_EQUALS(uint32_t, autor.id, result2->id_autor);
-  TEST_ASSERT(strcmp(result2->mensaje, mensaje) == 0);
-  TEST_ASSERT(autor.seguidores[0]->feed != NULL);
-  TEST_ASSERT(autor.seguidores[0]->feed->first != NULL);
-  TEST_ASSERT(result2 == autor.seguidores[0]->feed->first->value);
+  producto_t *item1copy =
+      crear_item(u1, "electro", "celular", 1, 500, 32); // nivel 0, nuevo -> NO
+  producto_t *item2copy =
+      crear_item(u2, "hogar", "mesa", 1, 200, 2); // nivel 1, nuevo -> SÍ
+  producto_t *item3copy =
+      crear_item(u3, "ropa", "camisa", 1, 100, 1); // nivel 2, nuevo -> SÍ
 
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+  agregar_nodo(&catalogo2, crear_nodo(item1));
+  agregar_nodo(&catalogo2, crear_nodo(item2));
+  agregar_nodo(&catalogo2, crear_nodo(item3));
 
-  free(result2);
+  producto_t *result2 =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo2);
+  int count2 = contar_items_resultado(result2);
 
-  liberar_usuario(&seg1);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&autor);
-  liberar_usuario(&autor_copy);
+  TEST_ASSERT_EQUALS(int, 2, count2);
+  TEST_ASSERT(item_en_resultado(result2, item2));
+  TEST_ASSERT(item_en_resultado(result2, item3));
+
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
+  TEST_ASSERT(verificarIntegridad(item3, item3copy));
+
+  if (result2)
+    free(result2);
+
+  free(item1copy);
+  free(item2copy);
+  free(item3copy);
+
+  free(item1);
+  free(item2);
+  free(item3);
+
+  free(u1);
+  free(u2);
+  free(u3);
+  liberar_lista(&catalogo2);
 }
 
-TEST(test_ej1_publicar_clonado_mensaje) {
-  usuario_t user = crear_usuario(123);
-  char mensaje[] = "Mensaje original";
+TEST(test_ej1_estados) {
+  catalogo_t catalogo3 = {NULL};
 
-  usuario_t user_copy = clonar_usuario(&user);
+  usuario_t *u1 = crear_usuario(1, 1); // nivel 1
+  usuario_t *u2 = crear_usuario(2, 1); // nivel 1 (usuario diferente)
 
-  tuit_t *result3 = TEST_CALL_S(publicar, mensaje, &user);
+  producto_t *item1 = crear_item(u1, "electro", "tv", 0, 800, 0); // usado -> NO
+  producto_t *item2 =
+      crear_item(u2, "electro", "radio", 1, 300, 1); // nuevo -> SÍ
 
-  TEST_ASSERT(result3 != NULL);
+  producto_t *item1copy =
+      crear_item(u1, "electro", "tv", 0, 800, 0); // usado -> NO
+  producto_t *item2copy =
+      crear_item(u2, "electro", "radio", 1, 300, 1); // nuevo -> SÍ
 
-  mensaje[0] = 'X';
+  agregar_nodo(&catalogo3, crear_nodo(item1));
+  agregar_nodo(&catalogo3, crear_nodo(item2));
 
-  TEST_ASSERT_EQUALS(uint32_t, user.id, result3->id_autor);
-  TEST_ASSERT(strcmp(result3->mensaje, "Mensaje original") == 0);
-  TEST_ASSERT(user.feed != NULL);
-  TEST_ASSERT(user.feed->first != NULL);
-  TEST_ASSERT(result3 == user.feed->first->value);
+  producto_t *result3 =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo3);
+  int count3 = contar_items_resultado(result3);
 
-  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, true));
+  TEST_ASSERT_EQUALS(int, 1, count3);
+  TEST_ASSERT(item_en_resultado(result3, item2));
 
-  free(result3);
-  liberar_usuario(&user);
-  liberar_usuario(&user_copy);
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
+
+  if (result3)
+    free(result3);
+
+  free(item1copy);
+  free(item2copy);
+
+  free(item1);
+  free(item2);
+
+  free(u1);
+  free(u2);
+
+  liberar_lista(&catalogo3);
 }
 
-TEST(test_ej1_publicar_dos_seguidores) {
-  usuario_t autor = crear_usuario(10);
-  usuario_t seg1 = crear_usuario(20);
-  usuario_t seg2 = crear_usuario(30);
+TEST(test_ej1_ninguno) {
+  catalogo_t catalogo4 = {NULL};
 
-  autor.seguidores = (usuario_t **)malloc(2 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.seguidores[1] = &seg2;
-  autor.cantSeguidores = 2;
+  usuario_t *u1 = crear_usuario(1, 0); // nivel 0
+  usuario_t *u2 = crear_usuario(2, 1); // nivel 1
 
-  char *mensaje = "Hola a todos";
+  producto_t *item1 =
+      crear_item(u1, "hogar", "silla", 1, 150, 5); // nivel 0, nuevo -> NO
+  producto_t *item2 =
+      crear_item(u2, "ropa", "pantalon", 0, 80, 10); // nivel 1, usado -> NO
 
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
-  usuario_t seg2_copy = clonar_usuario(&seg2);
+  producto_t *item1copy =
+      crear_item(u1, "hogar", "silla", 1, 150, 5); // nivel 0, nuevo -> NO
+  producto_t *item2copy =
+      crear_item(u2, "ropa", "pantalon", 0, 80, 10); // nivel 1, usado -> NO
 
-  tuit_t *result4 = TEST_CALL_S(publicar, mensaje, &autor);
+  agregar_nodo(&catalogo4, crear_nodo(item1));
+  agregar_nodo(&catalogo4, crear_nodo(item2));
 
-  TEST_ASSERT_EQUALS(uint32_t, 10, result4->id_autor);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(autor.feed != NULL);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(result4 == autor.feed->first->value);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(seg1.feed != NULL);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(result4 == seg1.feed->first->value);
-  TEST_ASSERT(seg2.feed != NULL);
-  TEST_ASSERT(seg2.feed->first != NULL);
-  TEST_ASSERT(result4 == seg2.feed->first->value);
+  producto_t *result4 =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo4);
+  int count4 = contar_items_resultado(result4);
 
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg2, &seg2_copy, false, true, true, true));
+  TEST_ASSERT_EQUALS(int, 0, count4);
 
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
 
-  free(result4);
-  liberar_usuario(&seg1);
-  liberar_usuario(&seg2);
-  liberar_usuario(&autor);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&seg2_copy);
-  liberar_usuario(&autor_copy);
+  if (result4)
+    free(result4);
+
+  free(item1copy);
+  free(item2copy);
+
+  free(item1);
+  free(item2);
+
+  free(u1);
+  free(u2);
+  liberar_lista(&catalogo4);
 }
 
-TEST(test_ej1_publicar_inserta_al_principio) {
-  usuario_t autor = crear_usuario(1);
+TEST(test_ej1_todos) {
+  catalogo_t catalogo5 = {NULL};
 
-  usuario_t seg1 = crear_usuario(2);
+  usuario_t *u1 = crear_usuario(1, 1); // nivel 1
+  usuario_t *u2 = crear_usuario(2, 2); // nivel 2
 
-  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.cantSeguidores = 1;
+  producto_t *item1 =
+      crear_item(u1, "electro", "laptop", 1, 1500, 100); // nivel 1, nuevo -> SÍ
+  producto_t *item2 = crear_item(u2, "hogar", "heladera", 1, 2000,
+                                 1000); // nivel 2, nuevo -> SÍ
 
-  tuit_t *t = crear_tuit("viejo", 0, 0, 999);
+  producto_t *item1copy =
+      crear_item(u1, "electro", "laptop", 1, 1500, 100); // nivel 1, nuevo -> SÍ
+  producto_t *item2copy = crear_item(u2, "hogar", "heladera", 1, 2000,
+                                     1000); // nivel 2, nuevo -> SÍ
+  //
+  agregar_nodo(&catalogo5, crear_nodo(item1));
+  agregar_nodo(&catalogo5, crear_nodo(item2));
 
-  agregar_publicacion(&seg1, crear_publicacion(t));
+  producto_t *result5 =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo5);
+  int count5 = contar_items_resultado(result5);
 
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
+  TEST_ASSERT_EQUALS(int, 2, count5);
+  TEST_ASSERT(item_en_resultado(result5, item1));
+  TEST_ASSERT(item_en_resultado(result5, item2));
 
-  tuit_t *result5 = TEST_CALL_S(publicar, "nuevo", &autor);
-  
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(autor.feed != NULL);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(result5 == autor.feed->first->value);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(seg1.feed != NULL);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(result5 == seg1.feed->first->value);
-  TEST_ASSERT(strcmp(result5->mensaje, "nuevo") == 0);
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
 
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+  if (result5)
+    free(result5);
 
-  free(t);
-  free(result5);
-  liberar_usuario(&seg1);
-  liberar_usuario(&autor);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&autor_copy);
+  free(item1);
+  free(item2);
+
+  free(u1);
+  free(u2);
+
+  free(item1copy);
+  free(item2copy);
+  liberar_lista(&catalogo5);
 }
 
-TEST(test_ej1_publicar_doble_orden) {
-  usuario_t autor = crear_usuario(7);
-  usuario_t seg1 = crear_usuario(8);
+TEST(test_ej1_usuario_verificado_multiples_productos_nuevos) {
+  catalogo_t catalogo = {NULL};
+  usuario_t *u1 = crear_usuario(1, 1); // nivel 1 - verificado
 
-  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  autor.seguidores[0] = &seg1;
-  autor.cantSeguidores = 1;
+  producto_t *item1 = crear_item(u1, "hogar", "silla", 1, 150, 5); // nuevo
+  producto_t *item2 = crear_item(u1, "hogar", "mesa", 1, 300, 3);  // nuevo
+  producto_t *item3 =
+      crear_item(u1, "electronica", "laptop", 1, 800, 1); // nuevo
 
-  usuario_t autor_copy = clonar_usuario(&autor);
-  usuario_t seg1_copy = clonar_usuario(&seg1);
+  producto_t *item1copy = crear_item(u1, "hogar", "silla", 1, 150, 5);
+  producto_t *item2copy = crear_item(u1, "hogar", "mesa", 1, 300, 3);
+  producto_t *item3copy = crear_item(u1, "electronica", "laptop", 1, 800, 1);
 
+  agregar_nodo(&catalogo, crear_nodo(item1));
+  agregar_nodo(&catalogo, crear_nodo(item2));
+  agregar_nodo(&catalogo, crear_nodo(item3));
 
-  tuit_t *t1 = TEST_CALL_S(publicar, "uno", &autor);
-  tuit_t *t2 = TEST_CALL_S(publicar, "dos", &autor);
+  producto_t *result =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo);
+  int count = contar_items_resultado(result);
 
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(autor.feed != NULL);
-  TEST_ASSERT(autor.feed->first != NULL);
-  TEST_ASSERT(t2 == autor.feed->first->value);
-  TEST_ASSERT(autor.feed->first->next != NULL);
-  TEST_ASSERT(t1 == autor.feed->first->next->value);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(seg1.feed != NULL);
-  TEST_ASSERT(seg1.feed->first != NULL);
-  TEST_ASSERT(t2 == seg1.feed->first->value);
-  TEST_ASSERT(seg1.feed->first->next != NULL);
-  TEST_ASSERT(t1 == seg1.feed->first->next->value);
-  TEST_ASSERT(strcmp(t2->mensaje, "dos") == 0);
-  TEST_ASSERT(strcmp(t1->mensaje, "uno") == 0);
+  TEST_ASSERT_EQUALS(int, 3, count); // Todos los productos deben aparecer
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
+  TEST_ASSERT(verificarIntegridad(item3, item3copy));
 
-  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+  if (result)
+    free(result);
 
-  free(t1);
-  free(t2);
-
-  liberar_usuario(&seg1);
-  liberar_usuario(&autor);
-  liberar_usuario(&seg1_copy);
-  liberar_usuario(&autor_copy);
+  free(item1copy);
+  free(item2copy);
+  free(item3copy);
+  free(item1);
+  free(item2);
+  free(item3);
+  free(u1);
+  liberar_lista(&catalogo);
 }
 
-TEST(test_ej1_publicar_dos_autores_mismo_seguidor) {
-  usuario_t a1 = crear_usuario(91);
-  usuario_t a2 = crear_usuario(92);
+TEST(test_ej1_multiples_usuarios_multiples_productos) {
+  catalogo_t catalogo = {NULL};
+  usuario_t *u1 = crear_usuario(1, 1); // verificado
+  usuario_t *u2 = crear_usuario(2, 0); // no verificado
+  usuario_t *u3 = crear_usuario(3, 1); // verificado
 
-  usuario_t seg = crear_usuario(93);
-  seg.seguidores = NULL;
-  seg.seguidos = (usuario_t **)malloc(2 * sizeof(usuario_t*));
-  seg.bloqueados = NULL;
+  producto_t *item1 =
+      crear_item(u1, "hogar", "silla", 1, 150, 5);                // nuevo -> SÍ
+  producto_t *item2 = crear_item(u1, "hogar", "mesa", 0, 200, 3); // usado -> NO
 
-  a1.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  a2.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
-  a1.seguidores[0] = &seg;
-  a2.seguidores[0] = &seg;
-  a1.cantSeguidores = 1;
-  a2.cantSeguidores = 1;
+  producto_t *item3 = crear_item(u2, "ropa", "camisa", 1, 50,
+                                 10); // nuevo pero usuario no verificado -> NO
+  producto_t *item4 = crear_item(u2, "ropa", "pantalon", 1, 80,
+                                 5); // nuevo pero usuario no verificado -> NO
 
-  usuario_t a1_copy = clonar_usuario(&a1);
-  usuario_t a2_copy = clonar_usuario(&a2);
-  usuario_t seg_copy = clonar_usuario(&seg);
+  producto_t *item5 =
+      crear_item(u3, "electronica", "mouse", 1, 25, 15); // nuevo -> SÍ
+  producto_t *item6 =
+      crear_item(u3, "electronica", "teclado", 1, 40, 8); // nuevo -> SÍ
 
-  tuit_t *t1 = TEST_CALL_S(publicar, "A", &a1);
-  tuit_t *t2 = TEST_CALL_S(publicar, "B", &a2);
+  producto_t *item1copy = crear_item(u1, "hogar", "silla", 1, 150, 5);
+  producto_t *item2copy = crear_item(u1, "hogar", "mesa", 0, 200, 3);
+  producto_t *item3copy = crear_item(u2, "ropa", "camisa", 1, 50, 10);
+  producto_t *item4copy = crear_item(u2, "ropa", "pantalon", 1, 80, 5);
+  producto_t *item5copy = crear_item(u3, "electronica", "mouse", 1, 25, 15);
+  producto_t *item6copy = crear_item(u3, "electronica", "teclado", 1, 40, 8);
 
-  TEST_ASSERT(seg.feed->first != NULL);
-  TEST_ASSERT(seg.feed != NULL);
-  TEST_ASSERT(seg.feed->first != NULL);
-  TEST_ASSERT(t2 == seg.feed->first->value);
-  TEST_ASSERT(seg.feed->first->next != NULL);
-  TEST_ASSERT(t1 == seg.feed->first->next->value);
-  TEST_ASSERT(strcmp(t2->mensaje, "B") == 0);
-  TEST_ASSERT(strcmp(t1->mensaje, "A") == 0);
+  agregar_nodo(&catalogo, crear_nodo(item1));
+  agregar_nodo(&catalogo, crear_nodo(item2));
+  agregar_nodo(&catalogo, crear_nodo(item3));
+  agregar_nodo(&catalogo, crear_nodo(item4));
+  agregar_nodo(&catalogo, crear_nodo(item5));
+  agregar_nodo(&catalogo, crear_nodo(item6));
 
-  TEST_ASSERT(usuarios_iguales(&a1, &a1_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&a2, &a2_copy, false, true, true, true));
-  TEST_ASSERT(usuarios_iguales(&seg, &seg_copy, false, true, true, true));
+  producto_t *result =
+      TEST_CALL_S(filtrarPublicacionesNuevasDeUsuariosVerificados, &catalogo);
+  int count = contar_items_resultado(result);
 
-  free(t1);
-  free(t2);
-  liberar_usuario(&seg);
-  liberar_usuario(&a1);
-  liberar_usuario(&a2);
-  liberar_usuario(&seg_copy);
-  liberar_usuario(&a1_copy);
-  liberar_usuario(&a2_copy);
+  TEST_ASSERT_EQUALS(int, 3, count); // item1, item5, item6
+  TEST_ASSERT(verificarIntegridad(item1, item1copy));
+  TEST_ASSERT(verificarIntegridad(item2, item2copy));
+  TEST_ASSERT(verificarIntegridad(item3, item3copy));
+  TEST_ASSERT(verificarIntegridad(item4, item4copy));
+  TEST_ASSERT(verificarIntegridad(item5, item5copy));
+  TEST_ASSERT(verificarIntegridad(item6, item6copy));
+
+  if (result)
+    free(result);
+
+  free(item1copy);
+  free(item2copy);
+  free(item3copy);
+  free(item4copy);
+  free(item5copy);
+  free(item6copy);
+
+  free(item1);
+  free(item2);
+  free(item3);
+  free(item4);
+  free(item5);
+  free(item6);
+
+  free(u1);
+  free(u2);
+  free(u3);
+  liberar_lista(&catalogo);
 }
 
 int main(int argc, char *argv[]) {
   printf("Corriendo los tests del ejercicio 1...\n");
-
-  test_ej1_publicar_sin_seguidores();
-  test_ej1_publicar_con_seguidor();
-  test_ej1_publicar_clonado_mensaje();
-  test_ej1_publicar_dos_seguidores();
-  test_ej1_publicar_inserta_al_principio();
-  test_ej1_publicar_doble_orden();
-  test_ej1_publicar_dos_autores_mismo_seguidor();
+  test_ej1_lista_vacia();
+  test_ej1_niveles();
+  test_ej1_estados();
+  test_ej1_ninguno();
+  test_ej1_todos();
+  test_ej1_multiples_usuarios_multiples_productos();
+  test_ej1_usuario_verificado_multiples_productos_nuevos();
 
   tests_end("Ejercicio 1");
 }

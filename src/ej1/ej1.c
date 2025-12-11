@@ -1,34 +1,46 @@
 #include "../ejs.h"
-#include <string.h>
 
-// Función principal: publicar un tuit
-tuit_t *publicar(char *mensaje, usuario_t *user) {
-  tuit_t* nuevaPub = malloc(sizeof(tuit_t));
+producto_t *filtrarPublicacionesNuevasDeUsuariosVerificados(catalogo_t *h) {
 
-  nuevaPub->id_autor = user->id;
-  nuevaPub->favoritos = 0;
-  nuevaPub->retuits = 0;
+    uint32_t cantPubli = contadorDePublicacionesValidas(h->first);
+    producto_t** publicacionesValidas = malloc((cantPubli+1)*sizeof(producto_t*));
 
-  strcpy(nuevaPub->mensaje,mensaje);
+    publicacion_t* actual = h->first;
 
-  agregar_al_feed(nuevaPub, user->feed);
-
-  for (int i = 0; i < user->cantSeguidores; i++)
-  {
-    usuario_t* seguidor_actual = user->seguidores[i];
-    agregar_al_feed(nuevaPub, seguidor_actual->feed);
-  }  
-  return nuevaPub;
-  
+    uint32_t i = 0;
+    while(actual != NULL){
+        if (verificarProducto(actual->value) == 1)
+        {
+            publicacionesValidas[i] = actual->value;
+            i++;
+        }
+        actual = actual->next;
+    }
+    publicacionesValidas[i] = NULL;
+    return publicacionesValidas; 
+    
 }
 
+int verificarProducto(producto_t* producto){
+    usuario_t* user = producto->usuario;
+    if (producto->estado == 1 && user->nivel >= 1)
+    {
+        return 1;
+    }
+    return 0; 
+}
 
-void agregar_al_feed(tuit_t* tuit, feed_t* feed)
-{
-  publicacion_t* nuevaPub = malloc(sizeof(publicacion_t));
-
-  nuevaPub->value = tuit;
-  nuevaPub->next = feed->first;
-
-  feed->first = nuevaPub;
+int contadorDePublicacionesValidas(publicacion_t* pubFirst){
+    publicacion_t* actual = pubFirst;
+    uint32_t contadorDePublicaciones = 0;
+    while (actual!= NULL)
+    {
+        if(verificarProducto(actual->value) == 1)
+        {
+            contadorDePublicaciones++;
+        }
+        actual = actual->next;
+    }
+    
+    return contadorDePublicaciones;
 }

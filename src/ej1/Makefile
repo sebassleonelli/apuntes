@@ -39,8 +39,10 @@ valgrind_asm: test_asm
 
 valgrind_abi: test_abi check_offsets
 	valgrind  --show-reachable=yes --leak-check=full --error-exitcode=1 ./test_abi \
-	&& echo "No se detectaron errores de memoria ni ABI (no incluye chequeo de offsets ni de preservación de no volátiles, que se loggean aparte)"
+	&& echo "No se detectaron errores de memoria ni ABI (no incluye chequeo de offsets ni de preservación de no volátiles, revisar que no haya errores más arriba)"
 
+check_offsets: ej1.asm
+	@cd ../../test_utils && $(MAKE) INPUT_C=$(STRUCTS_FILE) INPUT_ASM=$< INPUT_PATH=$(STRUCTS_PATH) --no-print-directory
 # Borra todos los archivos generados
 clean:
 	rm -f main_asm main_c test_c test_asm test_abi *.o
@@ -68,14 +70,10 @@ ej1_asm.o: ej1.asm
 	$(AS) $(ASFLAGS) $^ -o $@
 
 ej1_abi.o: ej1.asm
-	@cd ../../test_utils && $(MAKE) INPUT_C=$(STRUCTS_FILE) INPUT_ASM=$< INPUT_PATH=$(STRUCTS_PATH) --no-print-directory
 	$(AS) $(ASFLAGS) -p "../../test_utils/abi_enforcer.mac" $< -o $@
 
 abi_enforcer_regsave.o: abi_enforcer_regsave.asm
 	$(AS) $(ASFLAGS) $< -o $@
-
-check_offsets:
-	@$(MAKE) -C ../../test_utils INPUT_C=$(STRUCTS_FILE) INPUT_ASM=ej1.asm INPUT_PATH=$(STRUCTS_PATH) --no-print-directory
 
 .PHONY: clean run_c run_asm run_abi main_c main_asm valgrind_c valgrind_asm valgrind_abi
 

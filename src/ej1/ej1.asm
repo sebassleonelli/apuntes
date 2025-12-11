@@ -1,208 +1,181 @@
-extern malloc
-extern strcpy
-
 ;########### SECCION DE DATOS
 section .data
-
+extern malloc
 ;########### SECCION DE TEXTO (PROGRAMA)
 section .text
 
-
 ; Completar las definiciones (serán revisadas por ABI enforcer):
-TUIT_MENSAJE_OFFSET EQU 0
-TUIT_FAVORITOS_OFFSET EQU 140
-TUIT_RETUITS_OFFSET EQU 142 ; 2 de padding
-TUIT_ID_AUTOR_OFFSET EQU 144
-TUIT_SIZE EQU 148 ;La estructura se alinea al mas grande, en este caso 4 ==> 148/4 = 0 de resto
+USUARIO_ID_OFFSET EQU 0
+USUARIO_NIVEL_OFFSET EQU 4
+USUARIO_SIZE EQU 8
+
+PRODUCTO_USUARIO_OFFSET EQU 0
+PRODUCTO_CATEGORIA_OFFSET EQU 8
+PRODUCTO_NOMBRE_OFFSET EQU 17
+PRODUCTO_ESTADO_OFFSET EQU 42
+PRODUCTO_PRECIO_OFFSET EQU 44
+PRODUCTO_ID_OFFSET EQU 48
+PRODUCTO_SIZE EQU 56
 
 PUBLICACION_NEXT_OFFSET EQU 0
 PUBLICACION_VALUE_OFFSET EQU 8
 PUBLICACION_SIZE EQU 16
 
-FEED_FIRST_OFFSET EQU 0 
-FEED_SIZE EQU 8
+CATALOGO_FIRST_OFFSET EQU 0
+CATALOGO_SIZE EQU 8
+ 
+;PARA ABI CHEQUEAR REGISTROS VOLATILES,PILA LOS VOLATILES LOS LLENA DE BASURA AL HACER UNA LLAMADA
 
-USUARIO_FEED_OFFSET EQU 0;
-USUARIO_SEGUIDORES_OFFSET EQU 8
-USUARIO_CANT_SEGUIDORES_OFFSET EQU 16; 
-USUARIO_SEGUIDOS_OFFSET EQU 24 
-USUARIO_CANT_SEGUIDOS_OFFSET EQU 32 
-USUARIO_BLOQUEADOS_OFFSET EQU 40; 
-USUARIO_CANT_BLOQUEADOS_OFFSET EQU 48 
-USUARIO_ID_OFFSET EQU 52; 
-USUARIO_SIZE EQU 56 
+;producto_t* filtrarPublicacionesNuevasDeUsuariosVerificados (catalogo*)
+global filtrarPublicacionesNuevasDeUsuariosVerificados
+filtrarPublicacionesNuevasDeUsuariosVerificados:
 
-; void agregar_al_feed(tuit_t* tuit, feed_t* feed)
-; Argumentos (ABI):
-; rdi: tuit_t* tuit
-; rsi: feed_t* feed
-; Registros preservados: rbx, rbp, r12, r13, r14, r15
-; Registros de uso general: rax, rcx, rdx, r8, r9, r10, r11
-
-section .text
-	global agregar_al_feed
-	extern malloc
-
-agregar_al_feed:
-	; PUSH de registros que usaremos o que la función llamada (malloc) podría corromper
     push rbp
-    mov rbp, rsp
-    push rbx	; Guardamos rbx (registro callee-saved)
-    push r12	; Guardamos r12 (registro callee-saved)
-    push r13	; Guardamos r13 (registro callee-saved)
-	
-	; Guardamos los argumentos: rdi (tuit) en r12, rsi (feed) en r13
-	mov r12, rdi ; r12 = tuit
-	mov r13, rsi ; r13 = feed
+    mov rbp,rsp
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbx
+    sub rsp, 8 ;agregamos solo a las funciones que llaman a otras funciones
 
-	; 1. Asignación de Memoria para publicacion_t (sizeof(publicacion_t) = 16)
-	mov rdi, PUBLICACION_SIZE ; sizeof(publicacion_t)
-	call malloc ; rax = puntero a nueva publicacion_t
-	
-	; Verificación de malloc (Opcional, pero buena práctica)
-	; cmp rax, 0
-	; je error_malloc
+    mov r12,rdi ;r12 contiene el catalogo
 
-	; 2. Inicialización de la Publicación
-	; publicacion_t.next (offset 0) = feed->first (offset 0 de feed)
-	mov rcx, [r13]	; rcx = feed->first (publicacion_t*)
-	mov [rax], rcx	; nuevaPub->next = feed->first
+    mov rdi,[r12 + CATALOGO_FIRST_OFFSET] ;pasamos la primera publicacion a contador
 
-	; publicacion_t.value (offset 8) = tuit
-	mov [rax + 8], r12 ; nuevaPub->value = tuit
+    call contadorDePublicacionesValidas
 
-	; 3. Actualizar el Feed
-	; feed->first (offset 0) = nuevaPub (rax)
-	mov [r13], rax ; feed->first = nuevaPub
+    mov ebx,eax ;ebx contiene la cantidad de publicaciones
 
-	; Salto si hay error de malloc (No implementado en esta versión)
-	; jmp end
+    inc rbx
+    imul rbx,8
+    mov rdi,rbx
 
-; error_malloc:
-	; mov rax, 0 ; Devolver NULL o manejar error
+    call malloc
 
-; end:
-	; POP de registros
-    pop r13
-    pop r12
+    mov r14, rax ;puntero al array de productos
+
+    mov r13,[r12 + CATALOGO_FIRST_OFFSET] ;puntero a publicacion actual
+
+    xor r15,r15
+
+while1: 
+    cmp r13,0
+    je returnArray
+
+    mov r11, [r13 + PUBLICACION_VALUE_OFFSET] ;actual -> value
+    mov rdi,r11
+    call verificarProducto
+
+    cmp eax,0
+    je sigIteracion
+    ;equivalente a sacar el sub rsp,8 y pushear y popear antes y despues de la llamada
+    mov r11,[r13 + PUBLICACION_VALUE_OFFSET];el abi me llena de basura los volatiles, lo vuelvo a cargar
+    mov [r14 + r15*8], r11 ;publicacionesValidas[i] = actual->value
+    inc r15
+    jmp sigIteracion
+
+sigIteracion:
+    mov r13,[r13 + PUBLICACION_NEXT_OFFSET]
+    jmp while1
+
+returnArray:
+
+    mov qword[r14 + r15*8],0
+    mov rax,r14
+    jmp fin0 
+fin0:
+    add rsp, 8
     pop rbx
-    pop rbp
-	ret ; Retorno de función (void)
-
-; tuit_t* publicar(char* mensaje, usuario_t* usuario)
-; Argumentos (ABI):
-; rdi: char* mensaje
-; rsi: usuario_t* usuario
-; Retorno (ABI): rax: tuit_t*
-
-section .text
-	global publicar
-	extern malloc, strcpy, agregar_al_feed
-
-publicar:
-	; PUSH de registros que usaremos o que la función llamada (malloc, strcpy, etc.) podría corromper
-    push rbp
-    mov rbp, rsp
-	
-	; El stack debe estar alineado a 16 bytes antes de un 'call'.
-	; Como solo haremos un push, usaremos un truco al final o haremos un push más:
-    sub rsp, 8  ; Alineamos el stack para los 'call' internos (total 16 bytes de alineación: 8 bytes de rbp + 8 bytes de sub)
-
-	push rbx	; rbx = Puntero al nuevo tuit (Retorno final)
-	push r12	; r12 = usuario_t* (Argumento)
-	push r13	; r13 = Contador del bucle / Índice
-	push r14	; r14 = cantSeguidores
-	push r15	; r15 = Puntero base del arreglo de seguidores (usuario_t**)
-
-	; Guardamos los argumentos: rdi (mensaje) en r13, rsi (usuario) en r12
-	mov r12, rsi ; r12 = usuario_t*
-	mov r13, rdi ; r13 = char* mensaje
-
-	; 1. Asignación de Memoria para tuit_t (sizeof(tuit_t) = 148)
-	mov rdi, TUIT_SIZE ; sizeof(tuit_t)
-	call malloc ; rax = puntero a nuevo tuit
-	
-	; Verificación de malloc (Opcional)
-	; cmp rax, 0
-	; je error_return_null
-
-	mov rbx, rax ; rbx = nuevo_tuit (Lo guardamos para el retorno final)
-
-	; 2. Inicialización del Tuit
-	; 2.1. Copiar mensaje (strcpy)
-	; Argumentos para strcpy:
-	; rdi: Destino (tuit->mensaje, offset 0) -> rbx
-	; rsi: Origen (mensaje) -> r13
-	mov rdi, rbx 	; rdi = nuevo_tuit
-	mov rsi, r13 	; rsi = mensaje (clonado)
-	call strcpy 	; Copia el mensaje
-	
-	; 2.2. Inicializar favoritos (offset 140) y retuits (offset 142) a 0
-	; Usamos word (2 bytes) para los uint16_t
-	mov word [rbx + TUIT_FAVORITOS_OFFSET], 0 ; tuit->favoritos = 0
-	mov word [rbx + TUIT_RETUITS_OFFSET], 0 ; tuit->retuits = 0
-	
-	; 2.3. Copiar id_autor (offset 144)
-	; Leer usuario->id (offset 44)
-	mov ecx, dword [r12 + USUARIO_ID_OFFSET] ; ecx = usuario->id
-	; Escribir tuit->id_autor (offset 144)
-	mov dword [rbx + TUIT_ID_AUTOR_OFFSET], ecx ; tuit->id_autor = usuario->id
-	
-	; 3. Agregar al Feed Propio
-	; Argumentos para agregar_al_feed:
-	; rdi: tuit_t* tuit -> rbx
-	; rsi: feed_t* feed -> [r12 + 0] (usuario->feed)
-	mov rdi, rbx 	; rdi = nuevo_tuit
-	mov rsi, [r12] 	; rsi = usuario->feed (offset 0)
-	call agregar_al_feed
-	
-	; 4. Preparación para el Bucle de Seguidores
-	; r14 = cantSeguidores (offset 16)
-	mov r14d, dword [r12 + USUARIO_CANT_SEGUIDORES_OFFSET] ; r14 = usuario->cantSeguidores
-	; r15 = seguidores (offset 8)
-	mov r15, qword [r12 + USUARIO_SEGUIDORES_OFFSET]   ; r15 = usuario->seguidores (usuario_t**)
-	
-	; r13 = índice del bucle (i=0)
-	mov r13, 0
-
-loop_seguidores:
-	cmp r13, r14 ; Comparar i < cantSeguidores
-	jge loop_end ; Si i >= cantSeguidores, terminar bucle
-
-	; Dentro del Bucle:
-	; 5.1. Obtener seguidor_actual = user->seguidores[i]
-	; Cálculo de la dirección: r15 + r13 * 8 (el tamaño de un puntero es 8 bytes)
-	mov rax, r13 	; rax = i
-	imul rax, 8 	; rax = i * 8
-	add rax, r15 	; rax = &user->seguidores[i]
-	mov rdx, [rax] 	; rdx = user->seguidores[i] (usuario_t*)
-	
-	; 5.2. Llamar a agregar_al_feed(nuevo_tuit, seguidor_actual->feed)
-	; Argumentos:
-	; rdi: tuit_t* tuit -> rbx
-	; rsi: feed_t* feed -> [rdx + 0] (seguidor_actual->feed)
-	mov rdi, rbx 	; rdi = nuevo_tuit
-	mov rsi, [rdx] 	; rsi = seguidor_actual->feed (offset 0)
-	call agregar_al_feed
-
-	; 5.3. i++
-	inc r13
-	jmp loop_seguidores
-
-loop_end:
-	; 6. Retorno
-	; El puntero del nuevo tuit ya está en rbx. Lo movemos a rax para el retorno.
-	mov rax, rbx 
-
-; error_return_null:
-	; Si hubiera un error, rax contendría 0 (NULL)
-
-	; POP y limpieza
     pop r15
     pop r14
     pop r13
     pop r12
-    pop rbx
-    add rsp, 8 ; Deshacer la alineación del stack
     pop rbp
-	ret ; Retorna rax (el puntero a tuit_t)
+    ret
+
+verificarProducto:
+    ;rdi puntero a producto
+    push rbp
+    mov rbp,rsp
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbx
+
+    mov r12,rdi ;r12 contiene el puntero al producto
+
+    cmp r12, 0       
+    je return0
+
+    mov r13, qword[r12 + PRODUCTO_USUARIO_OFFSET] ;usuario_t* user = producto->usuario
+
+    cmp r13, 0       
+    je return0
+
+    cmp word[r12 + PRODUCTO_ESTADO_OFFSET],1
+    jne return0
+
+    cmp byte[r13 + USUARIO_NIVEL_OFFSET],1
+    jl return0
+
+    mov eax,1
+    jmp fin1
+
+return0:
+    mov eax,0
+    jmp fin1
+
+fin1:
+    pop rbx
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    ret
+
+contadorDePublicacionesValidas:
+    ;rdi puntero a la primer publicacion
+    push rbp
+    mov rbp,rsp
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbx
+    sub rsp, 8
+
+    mov r12,rdi ;r12 contiene el puntero a la primer publicacion
+
+    xor r8d,r8d ;contador de publi
+
+while0: 
+    cmp r12,0
+    je fin2
+
+    mov rdi,[r12 + PUBLICACION_VALUE_OFFSET]
+    call verificarProducto
+
+    cmp eax,1
+    jne itSig
+
+    inc r8d
+    jmp itSig
+
+itSig:
+    mov r12,[r12 + PUBLICACION_NEXT_OFFSET]
+    jmp while0
+
+fin2:
+    mov eax,r8d
+    add rsp, 8
+    pop rbx
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    ret
+

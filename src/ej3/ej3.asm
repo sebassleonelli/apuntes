@@ -1,190 +1,111 @@
-extern malloc
-
 ;########### SECCION DE DATOS
 section .data
-
+extern malloc
 ;########### SECCION DE TEXTO (PROGRAMA)
 section .text
 
 ; Completar las definiciones (serán revisadas por ABI enforcer):
-TUIT_MENSAJE_OFFSET EQU 0
-TUIT_FAVORITOS_OFFSET EQU 140
-TUIT_RETUITS_OFFSET EQU 142 ; 2 de padding
-TUIT_ID_AUTOR_OFFSET EQU 144
-TUIT_SIZE EQU 148 ;La estructura se alinea al mas grande, en este caso 4 ==> 148/4 = 0 de resto
+USUARIO_ID_OFFSET EQU 0
+USUARIO_NIVEL_OFFSET EQU 4
+USUARIO_SIZE EQU 8
+
+ID_SIZE EQU 2
+
+PRODUCTO_USUARIO_OFFSET EQU 0
+PRODUCTO_CATEGORIA_OFFSET EQU 8
+PRODUCTO_NOMBRE_OFFSET EQU 17
+PRODUCTO_ESTADO_OFFSET EQU 42
+PRODUCTO_PRECIO_OFFSET EQU 44
+PRODUCTO_ID_OFFSET EQU 48
+PRODUCTO_SIZE EQU 56
 
 PUBLICACION_NEXT_OFFSET EQU 0
 PUBLICACION_VALUE_OFFSET EQU 8
 PUBLICACION_SIZE EQU 16
 
-FEED_FIRST_OFFSET EQU 0 
-FEED_SIZE EQU 8
-
-USUARIO_FEED_OFFSET EQU 0;
-USUARIO_SEGUIDORES_OFFSET EQU 8
-USUARIO_CANT_SEGUIDORES_OFFSET EQU 16; 
-USUARIO_SEGUIDOS_OFFSET EQU 24 
-USUARIO_CANT_SEGUIDOS_OFFSET EQU 32 
-USUARIO_BLOQUEADOS_OFFSET EQU 40; 
-USUARIO_CANT_BLOQUEADOS_OFFSET EQU 48 
-USUARIO_ID_OFFSET EQU 52; 
-USUARIO_SIZE EQU 56 
-
-
-; tuit_t **trendingTopic(usuario_t *usuario, uint8_t (*esTuitSobresaliente)(tuit_t *));
-global trendingTopic 
-
-; --- tuit_t** trendingTopic(usuario_t* usuario, uint8_t (*esTuitSobresaliente)(tuit_t*)) ---
-; Argumentos: rdi=usuario, rsi=esTuitSobresaliente (función)
-trendingTopic:
+CATALOGO_FIRST_OFFSET EQU 0
+CATALOGO_SIZE EQU 8
+;usuario_t **asignarNivelesParaNuevosUsuarios(uint32_t *ids, uint32_t cantidadDeIds, uint8_t (*deQueNivelEs)(uint32_t)) {
+global asignarNivelesParaNuevosUsuarios 
+    asignarNivelesParaNuevosUsuarios:
     push rbp
     mov rbp, rsp
-    ; Guardar registros callee-saved (rbx, r12-r15)
-    push rbx
     push r12
     push r13
     push r14
     push r15
-    
-    ; Guardar argumentos originales
-    mov r12, rdi  ; r12 = usuario
-    mov r13, rsi  ; r13 = esTuitSobresaliente
-
-    call contarTuitsSobresalientes
-
-    mov ebx,eax ;cantidad de tuits sobresalientes del ususario
-
-    cmp ebx,0
-    je .returnNull
-
-    imul rbx,8
-    inc rbx
-    mov rdi,rbx
-
-    call malloc
-
-    mov r14,rax ;puntero al arreglo de tuits
-    cmp r14,0
-    je .returnNull
-
-    mov r10d, dword[r12 + USUARIO_ID_OFFSET] ;usuario -> id
-    mov r9, [r12 + USUARIO_FEED_OFFSET]
-    mov r11, [r9 + FEED_FIRST_OFFSET] ;actual = usuario->feed->first
-
-    xor r8,r8 ;indice arreglo
-
-.while:
-
-    cmp r11,0
-    je .returnArreglo
-
-    mov r15, [r11 + PUBLICACION_VALUE_OFFSET] ;puntero al tuit
-
-    cmp r15,0
-    je .sigIteracion
-
-    cmp dword[r15 + TUIT_ID_AUTOR_OFFSET],r10d
-    jne .sigIteracion
-
-    jmp .aplicarFuncion
-
-.aplicarFuncion:
-    mov rdi, r15
-    call r13
-    cmp al,1
-    jne .sigIteracion
-
-    mov [r14 + r8*8],r15
-    inc r8
-
-.sigIteracion:
-    mov r11, [r11 + PUBLICACION_NEXT_OFFSET]
-    jmp .while
-
-.returnNull:
-    mov rax,0
-    jmp .fin_trending
-.returnArreglo:
-
-    mov qword[r14 + r8*8],0
-    mov rax,r14 
-
-.fin_trending:
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-    pop rbp
-    ret
-
-
-; --- uint32_t contarTuitsSobresalientes(usuario_t* usuario, uint8_t (*esTuitSobresaliente)(tuit_t*)) ---
-; Argumentos: rdi=usuario, rsi=esTuitSobresaliente (función)
-contarTuitsSobresalientes:
-    push rbp
-    mov rbp, rsp
-    ; Guardar registros callee-saved (rbx, r12-r15)
     push rbx
-    push r12
-    push r13
-    push r14
-    push r15 
-
-    ; Inicialización de registros
-    mov r12, rdi      ; r12 = usuario
-    mov r13, rsi      ; r10 = esTuitSobresaliente (función)
+    push rcx
+    sub rsp, 8
     
-    cmp r12,0
-    je .return
-
-    cmp qword[r12 + USUARIO_FEED_OFFSET], 0
-    je .return
-
-    mov r8, [r12 + USUARIO_FEED_OFFSET]
-    cmp qword[r8 + FEED_FIRST_OFFSET],0
-    je .return
-
-    mov r14, r8 ;publicacion actual
-    mov r15, [r12 + USUARIO_ID_OFFSET] ;id_usuario
-
-    xor r10,r10 ;contador de tuits
-.while:
-
-    cmp r14,0
-    je .returnContador
-
-    mov rbx, [r14 + PUBLICACION_VALUE_OFFSET] ;puntero al tuit
-
-    cmp rbx,0
-    je .sigIteracion
-
-    cmp dword[rbx + TUIT_ID_AUTOR_OFFSET],r15d
-    jne .sigIteracion
-
-    jmp .aplicarFuncion
-
-.aplicarFuncion:
-    mov rdi, rbx
-    call r13
-    cmp al,1
-    jne .sigIteracion
-    inc r10
-
-.sigIteracion:
-    mov r14, [r14 + PUBLICACION_NEXT_OFFSET]
-    jmp .while
-
-.returnContador:
-    mov eax,r10d
-    jmp .fin
-.return:
-    mov rax,0
-.fin:       ; Devolver el contador (r14d se extiende a rax automáticamente)
+    mov r12, rdi ;uint32_t *ids
+    mov r13, rsi ;uint32_t cantidadDeIds
+    mov r14, rdx ;uint8_t (*deQueNivelEs)(uint32_t)
+    
+    cmp r13, 0 ;if (cantidadDeIds == 0) return NULL;
+    je .retornar_null
+    
+    ; Asignar memoria para el array de punteros
+    mov rdi, r13 ;cantidadDeIds
+    shl rdi, 3 ;cantidadDeIds * sizeof(usuario_t*) = cantidadDeIds * 8
+    call malloc
+    mov r15, rax ;usuario_t **res = malloc(...)
+    
+    mov rbx, 0 ;int i = 0
+    .for:
+    cmp rbx, r13 ;i < cantidadDeIds
+    jge .fin
+    
+    ; Calcular offset para ids[i]: i * 4 (uint32_t = 4 bytes)
+    ;OJO: Tengo *ids que apunta al primer elemento de un array
+    ;de enteros de 32 bits, entonces para calcular el offsets
+    ;hago: i * 4 bytes (idx * tamaño elem)
+    ;si tuviera **ids ahí sí sería i * 8 bytes (idx * tamaño puntero)
+    mov rax, rbx ;copiar i
+    shl rax, ID_SIZE ;i * 4
+    mov edi, [r12 + rax] ;uint32_t id = ids[i] (cargar 32 bits)
+    mov ecx, edi ;guardar id en ecx para después
+    
+    ; Llamar a deQueNivelEs(id)
+    call r14 ;deQueNivelEs(id)
+    ; Guardar el nivel en el stack antes de llamar a malloc
+    ; (r8 es volátil y malloc puede modificarlo)
+    push rax ;guardar el nivel (push guarda 64 bits, pero solo usamos el byte bajo)
+    
+    ; Asignar memoria para el nuevo usuario
+    mov rdi, USUARIO_SIZE ;sizeof(usuario_t)
+    call malloc ;usuario_t *new_u = malloc(sizeof(usuario_t))
+    ; rax ahora contiene el puntero al nuevo usuario
+    
+    ; Recuperar el nivel del stack
+    pop r8 ;recuperar el nivel (ahora en r8b)
+    
+    ; Asignar valores al usuario (ecx tiene el id, r8b tiene el nivel)
+    mov dword [rax + USUARIO_ID_OFFSET], ecx ;new_u->id = id
+    mov byte [rax + USUARIO_NIVEL_OFFSET], r8b ;new_u->nivel = n
+    
+    ; Calcular offset para res[i]: i * 8 (puntero = 8 bytes)
+    mov rdx, rbx ;copiar i
+    shl rdx, 3 ;i * 8
+    mov [r15 + rdx], rax ;res[i] = new_u
+    
+    inc rbx
+    jmp .for
+    
+    .fin:
+    mov rax, r15 ;return res
+    jmp .limpiar
+    
+    .retornar_null:
+    xor rax, rax ;return NULL
+    
+    .limpiar:
+    add rsp, 8
+    pop rcx
+    pop rbx
     pop r15
     pop r14
     pop r13
     pop r12
-    pop rbx
-    pop rbp
+    pop rbp 
     ret

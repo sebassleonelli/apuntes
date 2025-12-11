@@ -1,68 +1,26 @@
 #include "../ejs.h"
+#include <stdint.h>
 
-
-tuit_t** trendingTopic(usuario_t* usuario, esTuitSobresaliente_t esTuitSobresaliente) {
-    
-    // La llamada ahora es válida porque el prototipo está arriba.
-    uint32_t cantidad = contarTuitsSobresalientes(usuario, esTuitSobresaliente);
-    
-    if (cantidad == 0) {
-        return NULL; 
-    }
-    
-    tuit_t** arreglo = (tuit_t**)malloc(sizeof(tuit_t*) * (cantidad + 1));
-    
-    if (arreglo == NULL) {
-        return NULL;
-    }
-    
-    uint32_t id_usuario = usuario->id;
-    publicacion_t* actual = usuario->feed->first;
-    int indice = 0;
-    
-    while (actual != NULL) {
-        tuit_t* tuit = actual->value;
-        
-        if (tuit != NULL && tuit->id_autor == id_usuario) {
-            
-            if (esTuitSobresaliente(tuit) == 1) {
-                arreglo[indice] = tuit;
-                indice++;
-            }
-        }
-        
-        actual = actual->next;
-    }
-    
-    arreglo[indice] = NULL;
-    
-    return arreglo;
+usuario_t **
+asignarNivelesParaNuevosUsuarios(uint32_t *ids, uint32_t cantidadDeIds,
+                                 uint8_t (*deQueNivelEs)(uint32_t)) {
+{
+  if (cantidadDeIds == 0) return NULL;
+  // Asignar memoria para el array de punteros a usuarios
+  usuario_t **res = malloc(cantidadDeIds * sizeof(usuario_t*));
+  for (int i = 0; i < cantidadDeIds; i++)
+  {
+    // Asignar memoria para cada nuevo usuario
+    usuario_t *new_u = malloc(sizeof(usuario_t));
+    uint32_t id = ids[i];
+    uint8_t n = deQueNivelEs(id);
+    new_u->id = id;
+    new_u->nivel = n;
+    res[i] = new_u;
+  }
+  return res;
+}
 }
 
-// --- 4. Implementación de la Función Auxiliar ---
 
-static uint32_t contarTuitsSobresalientes(const usuario_t* usuario, esTuitSobresaliente_t esTuitSobresaliente) {
-    uint32_t contador = 0;
-    
-    if (!usuario || !usuario->feed || !usuario->feed->first) {
-        return 0;
-    }
-    
-    uint32_t id_usuario = usuario->id;
-    publicacion_t* actual = usuario->feed->first;
-    
-    while (actual != NULL) {
-        tuit_t* tuit = actual->value;
-        
-        if (tuit != NULL && tuit->id_autor == id_usuario) {
-            
-            if (esTuitSobresaliente(tuit) == 1) {
-                contador++;
-            }
-        }
-        
-        actual = actual->next;
-    }
-    
-    return contador;
-}
+

@@ -10,53 +10,46 @@
 #include <unistd.h> //define constantes y tipos standard, NULL, R_OK, F_OK, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO...
 
 //*************************************
-// Declaración de estructuras de la red social Twiner
+// Declaración de estructuras del marketplace Orga2-Libre
 //*************************************
+// Estructura Usuario
+typedef struct {
+  uint32_t id; // asmdef_offset:USUARIO_ID_OFFSET
+  uint8_t nivel; // asmdef_offset:USUARIO_NIVEL_OFFSET 
+} usuario_t;     // asmdef_size:USUARIO_SIZE
 
-// Forward declarations
-typedef struct usuario_s usuario_t;
-typedef struct feed_s feed_t;
-typedef struct publicacion_s publicacion_t;
-typedef struct tuit_s tuit_t;
+// Estructura Item
+typedef struct {
+  usuario_t *usuario; // asmdef_offset:PRODUCTO_USUARIO_OFFSET
+  char categoria[9]; // asmdef_offset:PRODUCTO_CATEGORIA_OFFSET
+  char nombre[25]; // asmdef_offset:PRODUCTO_NOMBRE_OFFSET
+  uint16_t estado; // asmdef_offset:PRODUCTO_ESTADO_OFFSET
+  uint32_t precio; // asmdef_offset:PRODUCTO_PRECIO_OFFSET
+  uint32_t id; // asmdef_offset:PRODUCTO_ID_OFFSET
+} producto_t; // asmdef_size:PRODUCTO_SIZE
 
-// Estructura tuit
-typedef struct tuit_s {
-  char mensaje[140];       // asmdef_offset:TUIT_MENSAJE_OFFSET
-  uint16_t favoritos;      // asmdef_offset:TUIT_FAVORITOS_OFFSET
-  uint16_t retuits;        // asmdef_offset:TUIT_RETUITS_OFFSET
-  uint32_t id_autor;       // asmdef_offset:TUIT_ID_AUTOR_OFFSET
-} tuit_t;                  // asmdef_offset:TUIT_SIZE
+// Estructura Nodo
+typedef struct publicacion_t {
+  struct publicacion_t *next; // asmdef_offset:PUBLICACION_NEXT_OFFSET
+  producto_t *value; // asmdef_offset:PUBLICACION_VALUE_OFFSET
+} publicacion_t; // asmdef_size:PUBLICACION_SIZE
 
-// Estructura publicacion
-typedef struct publicacion_s {
-  publicacion_t *next;     // asmdef_offset:PUBLICACION_NEXT_OFFSET
-  tuit_t *value;           // asmdef_offset:PUBLICACION_VALUE_OFFSET
-} publicacion_t;           // asmdef_offset:PUBLICACION_SIZE
+// Estructura Head
+typedef struct {
+  struct publicacion_t *first; // asmdef_offset:CATALOGO_FIRST_OFFSET
+} catalogo_t; // asmdef_size:CATALOGO_SIZE
 
-// Estructura feed
-typedef struct feed_s {
-  publicacion_t *first;    // asmdef_offset:FEED_FIRST_OFFSET
-} feed_t;                  // asmdef_offset:FEED_SIZE
+//*******************************
+// Declaración de funciones
+//*******************************
 
-// Estructura usuario
-typedef struct usuario_s {
-  feed_t *feed;            // asmdef_offset:USUARIO_FEED_OFFSET
-  usuario_t **seguidores;  // asmdef_offset:USUARIO_SEGUIDORES_OFFSET
-  uint32_t cantSeguidores; // asmdef_offset:USUARIO_CANT_SEGUIDORES_OFFSET
-  usuario_t **seguidos;    // asmdef_offset:USUARIO_SEGUIDOS_OFFSET
-  uint32_t cantSeguidos;   // asmdef_offset:USUARIO_CANT_SEGUIDOS_OFFSET
-  usuario_t **bloqueados;  // asmdef_offset:USUARIO_BLOQUEADOS_OFFSET
-  uint32_t cantBloqueados; // asmdef_offset:USUARIO_CANT_BLOQUEADOS_OFFSET
-  uint32_t id;             // asmdef_offset:USUARIO_ID_OFFSET
-} usuario_t;               // asmdef_offset:USUARIO_SIZE
+// Ejercicio 1:
+producto_t *filtrarPublicacionesNuevasDeUsuariosVerificados(catalogo_t *h);
 
-//*************************************
-// Declaración de funciones de los ejercicios
-//*************************************
+// Ejercicio 2:
+catalogo_t *removerCopias(catalogo_t *h);
 
-tuit_t *publicar(char *mensaje, usuario_t *usuario);
-
-void bloquearUsuario(usuario_t *usuario, usuario_t *usuarioABloquear);
-
-tuit_t **trendingTopic(usuario_t *usuario,
-                       uint8_t (*esTuitSobresaliente)(tuit_t *));
+// Ejercicio 3:
+usuario_t **asignarNivelesParaNuevosUsuarios(uint32_t *ids,
+                                             uint32_t cantidadDeIds,
+                                             uint8_t (*deQueNivelEs)(uint32_t));
