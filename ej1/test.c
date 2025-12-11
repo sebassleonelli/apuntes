@@ -1,271 +1,274 @@
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "../../test_utils/test-utils.h"
-#include "ej1.h"
+#define WITH_ABI_MESSAGE
+#include "../ejs.h"
+#include "../utils.h"
 
-/**
- * Cuenta cuántos tests corrieron exitosamente.
- */
-uint64_t successful_tests = 0;
-/**
- * Cuenta cuántos tests test fallaron.
- */
-uint64_t failed_tests = 0;
+TEST(test_ej1_publicar_sin_seguidores) {
+  usuario_t user = crear_usuario(42);
+  usuario_t user_copy = clonar_usuario(&user);
+  char *mensaje = "Mi primer tuit";
 
-/**
- * El mensaje [DONE] escrito en verde.
- */
-#define DONE "[\033[32;1mDONE\033[0m] "
+  tuit_t *result1 = TEST_CALL_S(publicar, mensaje, &user);
 
-/**
- * El mensaje [FAIL] escrito en rojo.
- */
-#define FAIL "[\033[31;1mFAIL\033[0m] "
+  TEST_ASSERT(result1 != NULL);
+  TEST_ASSERT_EQUALS(uint32_t, 42, result1->id_autor);
+  TEST_ASSERT(strcmp(result1->mensaje, mensaje) == 0);
+  TEST_ASSERT_EQUALS(uint32_t, 0, result1->favoritos);
+  TEST_ASSERT_EQUALS(uint32_t, 0, result1->retuits);
+  TEST_ASSERT(user.feed != NULL);
+  TEST_ASSERT(user.feed->first != NULL);
+  TEST_ASSERT(result1 == user.feed->first->value);
 
-/**
- * El mensaje [INFO] escrito en amarillo.
- */
-#define INFO "[\033[33;1mINFO\033[0m] "
+  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, true));
 
-/**
- * El mensaje [SKIP] escrito en magenta.
- */
-#define SKIP "[\033[95;1mSKIP\033[0m] "
-
-typedef enum {
-	COMPARAR_POR_NOMBRE,
-	COMPARAR_POR_FUERZA,
-	COMPARAR_POR_DURABILIDAD,
-	COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD
-} test_comparador_t;
-
-const char* nombre_comparador[] = {
-	[COMPARAR_POR_NOMBRE] = "COMPARAR_POR_NOMBRE",
-	[COMPARAR_POR_FUERZA] = "COMPARAR_POR_FUERZA",
-	[COMPARAR_POR_DURABILIDAD] = "COMPARAR_POR_DURABILIDAD",
-	[COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD] = "COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD"
-};
-
-bool test_comparar_por_nombre(item_t* a, item_t* b) {
-	return strcmp(a->nombre, b->nombre) <= 0;
+  free(result1);
+  liberar_usuario(&user);
+  liberar_usuario(&user_copy);
 }
 
-bool test_comparar_por_fuerza(item_t* a, item_t* b) {
-	return b->fuerza <= a->fuerza;
+TEST(test_ej1_publicar_con_seguidor) {
+  usuario_t autor = crear_usuario(100);
+  
+  usuario_t seg1 = crear_usuario(200);
+  
+  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  autor.seguidores[0] = &seg1;
+  autor.cantSeguidores++;
+
+  usuario_t autor_copy = clonar_usuario(&autor);
+  usuario_t seg1_copy = clonar_usuario(&seg1);
+
+  char *mensaje = "Nuevo tuit del autor";
+  tuit_t *result2 = TEST_CALL_S(publicar, mensaje, &autor);
+
+  TEST_ASSERT(result2 != NULL);
+  TEST_ASSERT_EQUALS(uint32_t, autor.id, result2->id_autor);
+  TEST_ASSERT(strcmp(result2->mensaje, mensaje) == 0);
+  TEST_ASSERT(autor.seguidores[0]->feed != NULL);
+  TEST_ASSERT(autor.seguidores[0]->feed->first != NULL);
+  TEST_ASSERT(result2 == autor.seguidores[0]->feed->first->value);
+
+  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+
+  free(result2);
+
+  liberar_usuario(&seg1);
+  liberar_usuario(&seg1_copy);
+  liberar_usuario(&autor);
+  liberar_usuario(&autor_copy);
 }
 
-bool test_comparar_por_durabilidad(item_t* a, item_t* b) {
-	return a->durabilidad <= b->durabilidad;
+TEST(test_ej1_publicar_clonado_mensaje) {
+  usuario_t user = crear_usuario(123);
+  char mensaje[] = "Mensaje original";
+
+  usuario_t user_copy = clonar_usuario(&user);
+
+  tuit_t *result3 = TEST_CALL_S(publicar, mensaje, &user);
+
+  TEST_ASSERT(result3 != NULL);
+
+  mensaje[0] = 'X';
+
+  TEST_ASSERT_EQUALS(uint32_t, user.id, result3->id_autor);
+  TEST_ASSERT(strcmp(result3->mensaje, "Mensaje original") == 0);
+  TEST_ASSERT(user.feed != NULL);
+  TEST_ASSERT(user.feed->first != NULL);
+  TEST_ASSERT(result3 == user.feed->first->value);
+
+  TEST_ASSERT(usuarios_iguales(&user, &user_copy, false, true, true, true));
+
+  free(result3);
+  liberar_usuario(&user);
+  liberar_usuario(&user_copy);
 }
 
-bool test_comparar_por_nombre_desempatar_por_durabilidad(item_t* a, item_t* b) {
-	int resultado = strcmp(a->nombre, b->nombre);
-	if (resultado == 0) return a->durabilidad <= b->durabilidad;
-	return resultado < 0;
+TEST(test_ej1_publicar_dos_seguidores) {
+  usuario_t autor = crear_usuario(10);
+  usuario_t seg1 = crear_usuario(20);
+  usuario_t seg2 = crear_usuario(30);
+
+  autor.seguidores = (usuario_t **)malloc(2 * sizeof(usuario_t*));
+  autor.seguidores[0] = &seg1;
+  autor.seguidores[1] = &seg2;
+  autor.cantSeguidores = 2;
+
+  char *mensaje = "Hola a todos";
+
+  usuario_t autor_copy = clonar_usuario(&autor);
+  usuario_t seg1_copy = clonar_usuario(&seg1);
+  usuario_t seg2_copy = clonar_usuario(&seg2);
+
+  tuit_t *result4 = TEST_CALL_S(publicar, mensaje, &autor);
+
+  TEST_ASSERT_EQUALS(uint32_t, 10, result4->id_autor);
+  TEST_ASSERT(autor.feed->first != NULL);
+  TEST_ASSERT(autor.feed != NULL);
+  TEST_ASSERT(autor.feed->first != NULL);
+  TEST_ASSERT(result4 == autor.feed->first->value);
+  TEST_ASSERT(seg1.feed->first != NULL);
+  TEST_ASSERT(seg1.feed != NULL);
+  TEST_ASSERT(seg1.feed->first != NULL);
+  TEST_ASSERT(result4 == seg1.feed->first->value);
+  TEST_ASSERT(seg2.feed != NULL);
+  TEST_ASSERT(seg2.feed->first != NULL);
+  TEST_ASSERT(result4 == seg2.feed->first->value);
+
+  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&seg2, &seg2_copy, false, true, true, true));
+
+
+  free(result4);
+  liberar_usuario(&seg1);
+  liberar_usuario(&seg2);
+  liberar_usuario(&autor);
+  liberar_usuario(&seg1_copy);
+  liberar_usuario(&seg2_copy);
+  liberar_usuario(&autor_copy);
 }
 
-comparador_t funcion_comparador[] = {
-	[COMPARAR_POR_NOMBRE] = test_comparar_por_nombre,
-	[COMPARAR_POR_FUERZA] = test_comparar_por_fuerza,
-	[COMPARAR_POR_DURABILIDAD] = test_comparar_por_durabilidad,
-	[COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD] = test_comparar_por_nombre_desempatar_por_durabilidad
-};
+TEST(test_ej1_publicar_inserta_al_principio) {
+  usuario_t autor = crear_usuario(1);
 
-void test_es_indice_ordenado(bool esperado, item_t** inventario, uint16_t* indice, test_comparador_t id_comparador) {
-	bool failed = false;
+  usuario_t seg1 = crear_usuario(2);
 
-	uint16_t tamanio = 0;
-	for (item_t** i = inventario; *i != NULL; i++, tamanio++);
+  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  autor.seguidores[0] = &seg1;
+  autor.cantSeguidores = 1;
 
-	bool resultado = es_indice_ordenado(inventario, indice, tamanio, funcion_comparador[id_comparador]);
+  tuit_t *t = crear_tuit("viejo", 0, 0, 999);
 
-	if (resultado != esperado) {
-		printf(FAIL "%s != es_indice_ordenado(inventario, (uint16_t[]) {", esperado ? " true" : "false");
-		for (int i = 0; i < tamanio; i++) {
-			printf("%d", indice[i]);
-			if (i + 1 < tamanio) {
-				printf(", ");
-			}
-		}
-		printf("}, %d, %s)\n", tamanio, nombre_comparador[id_comparador]);
-		failed_tests++;
-		return;
-	} else {
-		printf(DONE "%s == es_indice_ordenado(inventario, (uint16_t[]) {", esperado ? " true" : "false");
-		for (int i = 0; i < tamanio; i++) {
-			printf("%d", indice[i]);
-			if (i + 1 < tamanio) {
-				printf(", ");
-			}
-		}
-		printf("}, %d, %s)\n", tamanio, nombre_comparador[id_comparador]);
-		successful_tests++;
-	}
+  agregar_publicacion(&seg1, crear_publicacion(t));
+
+  usuario_t autor_copy = clonar_usuario(&autor);
+  usuario_t seg1_copy = clonar_usuario(&seg1);
+
+  tuit_t *result5 = TEST_CALL_S(publicar, "nuevo", &autor);
+  
+  TEST_ASSERT(autor.feed->first != NULL);
+  TEST_ASSERT(autor.feed != NULL);
+  TEST_ASSERT(autor.feed->first != NULL);
+  TEST_ASSERT(result5 == autor.feed->first->value);
+  TEST_ASSERT(seg1.feed->first != NULL);
+  TEST_ASSERT(seg1.feed != NULL);
+  TEST_ASSERT(seg1.feed->first != NULL);
+  TEST_ASSERT(result5 == seg1.feed->first->value);
+  TEST_ASSERT(strcmp(result5->mensaje, "nuevo") == 0);
+
+  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+
+  free(t);
+  free(result5);
+  liberar_usuario(&seg1);
+  liberar_usuario(&autor);
+  liberar_usuario(&seg1_copy);
+  liberar_usuario(&autor_copy);
 }
 
-void test_indice_a_inventario(item_t** inventario, uint16_t* indice, item_t** esperado) {
-	bool failed = false;
+TEST(test_ej1_publicar_doble_orden) {
+  usuario_t autor = crear_usuario(7);
+  usuario_t seg1 = crear_usuario(8);
 
-	uint16_t tamanio = 0;
-	for (item_t** i = inventario; *i != NULL; i++, tamanio++);
+  autor.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  autor.seguidores[0] = &seg1;
+  autor.cantSeguidores = 1;
 
-	item_t** resultado = indice_a_inventario(inventario, indice, tamanio);
+  usuario_t autor_copy = clonar_usuario(&autor);
+  usuario_t seg1_copy = clonar_usuario(&seg1);
 
-	for (int i = 0; i < tamanio; i++) {
-		if (resultado[i] == esperado[i]) continue;
 
-		printf(FAIL "indice_a_inventario(inventario, (uint16_t[]) {");
-		for (int i = 0; i < tamanio; i++) {
-			printf("%d", indice[i]);
-			if (i + 1 < tamanio) {
-				printf(", ");
-			}
-		}
-		printf("}, %d): Distinto ítem en la posición %d!\n", tamanio, i);
-		failed_tests++;
-		free(resultado);
-		return;
-	}
+  tuit_t *t1 = TEST_CALL_S(publicar, "uno", &autor);
+  tuit_t *t2 = TEST_CALL_S(publicar, "dos", &autor);
 
-	// No encontramos errores
-	printf(DONE "indice_a_inventario(inventario, (uint16_t[]) {");
-	for (int i = 0; i < tamanio; i++) {
-		printf("%d", indice[i]);
-		if (i + 1 < tamanio) {
-			printf(", ");
-		}
-	}
-	printf("}, %d)\n", tamanio);
-	successful_tests++;
-	free(resultado);
+  TEST_ASSERT(autor.feed->first != NULL);
+  TEST_ASSERT(autor.feed != NULL);
+  TEST_ASSERT(autor.feed->first != NULL);
+  TEST_ASSERT(t2 == autor.feed->first->value);
+  TEST_ASSERT(autor.feed->first->next != NULL);
+  TEST_ASSERT(t1 == autor.feed->first->next->value);
+  TEST_ASSERT(seg1.feed->first != NULL);
+  TEST_ASSERT(seg1.feed != NULL);
+  TEST_ASSERT(seg1.feed->first != NULL);
+  TEST_ASSERT(t2 == seg1.feed->first->value);
+  TEST_ASSERT(seg1.feed->first->next != NULL);
+  TEST_ASSERT(t1 == seg1.feed->first->next->value);
+  TEST_ASSERT(strcmp(t2->mensaje, "dos") == 0);
+  TEST_ASSERT(strcmp(t1->mensaje, "uno") == 0);
+
+  TEST_ASSERT(usuarios_iguales(&autor, &autor_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&seg1, &seg1_copy, false, true, true, true));
+
+  free(t1);
+  free(t2);
+
+  liberar_usuario(&seg1);
+  liberar_usuario(&autor);
+  liberar_usuario(&seg1_copy);
+  liberar_usuario(&autor_copy);
 }
 
-#define I(valor_nombre, valor_fuerza, valor_durabilidad) (&(item_t) { \
-	.nombre = #valor_nombre,                                          \
-	.fuerza = (valor_fuerza),                                         \
-	.durabilidad = (valor_durabilidad)                                \
-})
+TEST(test_ej1_publicar_dos_autores_mismo_seguidor) {
+  usuario_t a1 = crear_usuario(91);
+  usuario_t a2 = crear_usuario(92);
 
-/**
- * Evalúa los tests del ejercicio 1A. Este ejercicio requiere implementar
- * `es_indice_ordenado`.
- *
- * En caso de que se quieran skipear los tests alcanza con asignarle `false`
- * a `EJERCICIO_1A_HECHO`.
- */
-void test_ej1a(void) {
-	uint64_t failed_at_start = failed_tests;
-	if (!EJERCICIO_1A_HECHO) {
-		printf(SKIP "El ejercicio 1A no está hecho aún.\n");
-		return;
-	}
+  usuario_t seg = crear_usuario(93);
+  seg.seguidores = NULL;
+  seg.seguidos = (usuario_t **)malloc(2 * sizeof(usuario_t*));
+  seg.bloqueados = NULL;
 
-	item_t* inventario[] = {
-		I(Espada que espadea, 10, 5),
-		I(Escudo de carton, 1, 2),
-		I(Caramelos 30 min, 2, 3),
-		I(Yerba mate, 5, 1),
-		NULL
-	};
+  a1.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  a2.seguidores = (usuario_t **)malloc(1 * sizeof(usuario_t*));
+  a1.seguidores[0] = &seg;
+  a2.seguidores[0] = &seg;
+  a1.cantSeguidores = 1;
+  a2.cantSeguidores = 1;
 
-	test_es_indice_ordenado(true,  inventario, (uint16_t[]) {2, 1, 0, 3}, COMPARAR_POR_NOMBRE);
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {2, 1, 0, 3}, COMPARAR_POR_FUERZA);
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {2, 1, 0, 3}, COMPARAR_POR_DURABILIDAD);
-	test_es_indice_ordenado(true,  inventario, (uint16_t[]) {2, 1, 0, 3}, COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD);
+  usuario_t a1_copy = clonar_usuario(&a1);
+  usuario_t a2_copy = clonar_usuario(&a2);
+  usuario_t seg_copy = clonar_usuario(&seg);
 
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {0, 3, 2, 1}, COMPARAR_POR_NOMBRE);
-	test_es_indice_ordenado(true,  inventario, (uint16_t[]) {0, 3, 2, 1}, COMPARAR_POR_FUERZA);
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {0, 3, 2, 1}, COMPARAR_POR_DURABILIDAD);
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {0, 3, 2, 1}, COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD);
+  tuit_t *t1 = TEST_CALL_S(publicar, "A", &a1);
+  tuit_t *t2 = TEST_CALL_S(publicar, "B", &a2);
 
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {3, 1, 2, 0}, COMPARAR_POR_NOMBRE);
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {3, 1, 2, 0}, COMPARAR_POR_FUERZA);
-	test_es_indice_ordenado(true,  inventario, (uint16_t[]) {3, 1, 2, 0}, COMPARAR_POR_DURABILIDAD);
-	test_es_indice_ordenado(false, inventario, (uint16_t[]) {3, 1, 2, 0}, COMPARAR_POR_NOMBRE_DESEMPATAR_POR_DURABILIDAD);
+  TEST_ASSERT(seg.feed->first != NULL);
+  TEST_ASSERT(seg.feed != NULL);
+  TEST_ASSERT(seg.feed->first != NULL);
+  TEST_ASSERT(t2 == seg.feed->first->value);
+  TEST_ASSERT(seg.feed->first->next != NULL);
+  TEST_ASSERT(t1 == seg.feed->first->next->value);
+  TEST_ASSERT(strcmp(t2->mensaje, "B") == 0);
+  TEST_ASSERT(strcmp(t1->mensaje, "A") == 0);
 
-	if (failed_at_start < failed_tests) {
-		printf(FAIL "El ejercicio 1A tuvo tests que fallaron.\n");
-	}
+  TEST_ASSERT(usuarios_iguales(&a1, &a1_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&a2, &a2_copy, false, true, true, true));
+  TEST_ASSERT(usuarios_iguales(&seg, &seg_copy, false, true, true, true));
+
+  free(t1);
+  free(t2);
+  liberar_usuario(&seg);
+  liberar_usuario(&a1);
+  liberar_usuario(&a2);
+  liberar_usuario(&seg_copy);
+  liberar_usuario(&a1_copy);
+  liberar_usuario(&a2_copy);
 }
 
-/**
- * Evalúa los tests del ejercicio 1B. Este ejercicio requiere implementar
- * `es_indice_ordenado`.
- *
- * En caso de que se quieran skipear los tests alcanza con asignarle `false`
- * a `EJERCICIO_1B_HECHO`.
- */
-void test_ej1b(void) {
-	uint64_t failed_at_start = failed_tests;
-	if (!EJERCICIO_1B_HECHO) {
-		printf(SKIP "El ejercicio 1A no está hecho aún.\n");
-		return;
-	}
+int main(int argc, char *argv[]) {
+  printf("Corriendo los tests del ejercicio 1...\n");
 
-	item_t* inventario[] = {
-		I(Espada que espadea, 10, 5),
-		I(Escudo de carton, 1, 2),
-		I(Caramelos 30 min, 2, 3),
-		I(Yerba mate, 5, 1),
-		NULL
-	};
+  test_ej1_publicar_sin_seguidores();
+  test_ej1_publicar_con_seguidor();
+  test_ej1_publicar_clonado_mensaje();
+  test_ej1_publicar_dos_seguidores();
+  test_ej1_publicar_inserta_al_principio();
+  test_ej1_publicar_doble_orden();
+  test_ej1_publicar_dos_autores_mismo_seguidor();
 
-	test_indice_a_inventario(inventario, (uint16_t[]) {0, 1, 2, 3}, inventario);
-	test_indice_a_inventario(inventario, (uint16_t[]) {2, 1, 0, 3}, (item_t*[]) {
-		inventario[2],
-		inventario[1],
-		inventario[0],
-		inventario[3]
-	});
-	test_indice_a_inventario(inventario, (uint16_t[]) {0, 3, 2, 1}, (item_t*[]) {
-		inventario[0],
-		inventario[3],
-		inventario[2],
-		inventario[1]
-	});
-	test_indice_a_inventario(inventario, (uint16_t[]) {3, 1, 2, 0}, (item_t*[]) {
-		inventario[3],
-		inventario[1],
-		inventario[2],
-		inventario[0]
-	});
-
-	if (failed_at_start < failed_tests) {
-		printf(FAIL "El ejercicio 1B tuvo tests que fallaron.\n");
-	}
-}
-
-/**
- * Corre los tests de este ejercicio.
- *
- * Las variables `EJERCICIO_1A_HECHO` y `EJERCICIO_1B_HECHO` controlan qué
- * testsuites se van a correr. Ponerlas como `false` indica que el ejercicio no
- * está implementado y por lo tanto no querés que se corran los tests asociados
- * a él.
- *
- * Recordá que los dos ejercicios pueden implementarse independientemente uno
- * del otro.
- *
- * Si algún test falla el programa va a terminar con un código de error.
- */
-int main(int argc, char* argv[]) {
-	// 1A
-	test_ej1a();
-	// 1B
-	test_ej1b();
-
-	printf(
-		"\nSe corrieron %ld tests. %ld corrieron exitosamente. %ld fallaron.\n",
-		failed_tests + successful_tests, successful_tests, failed_tests
-	);
-
-	if (failed_tests) {
-		return 1;
-	} else {
-		return 0;
-	}
+  tests_end("Ejercicio 1");
 }

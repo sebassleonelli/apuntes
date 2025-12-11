@@ -1,10 +1,10 @@
 AS = nasm
-ASFLAGS = -f elf64 -g -F DWARF
+ASFLAGS = -f elf64 -g -F DWARF 
 LDFLAGS = -lm
 CFLAGS= -Wall -Wextra -Wno-pedantic -O0 -g -Wno-unused-function -Wno-unused-variable -Wno-unused-parameter -no-pie -z noexecstack -I ../../test_utils/
 VPATH=.:../../test_utils
 STRUCTS_FILE=../ejs.h
-STRUCTS_PATH="../src/ej1"
+STRUCTS_PATH="../src/ej3"
 # Crea los binarios en cuestión
 all: test_c test_asm #test_abi
 
@@ -46,28 +46,28 @@ clean:
 	rm -f main_asm main_c test_c test_asm test_abi *.o
 	@cd ../../test_utils && $(MAKE) clean
 
-test_c: test.c ej1.o utils.o
+test_c: test.c ej3.o utils.o
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-test_asm: test.c ej1_asm.o utils.o
+test_asm: test.c ej3_asm.o utils.o
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-test_abi: test.c ej1_abi.o utils.o abi_enforcer_regsave.o 
+test_abi: test.c ej3_abi.o utils.o abi_enforcer_regsave.o
 	$(CC) $(CFLAGS) -DWITH_ABI_ENFORCER=1 $^ -o $@ $(LDFLAGS)
 
-main_c: main.c ej1.c ../utils.c
+main_c: main.c ej3.c ../utils.c
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-main_asm: main.c ej1_asm.o utils.o
+main_asm: main.c ej3_asm.o utils.o
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 utils.o: ../utils.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-ej1_asm.o: ej1.asm
+ej3_asm.o: ej3.asm
 	$(AS) $(ASFLAGS) $^ -o $@
 
-ej1_abi.o: ej1.asm
+ej3_abi.o: ej3.asm
 	@cd ../../test_utils && $(MAKE) INPUT_C=$(STRUCTS_FILE) INPUT_ASM=$< INPUT_PATH=$(STRUCTS_PATH) --no-print-directory
 	$(AS) $(ASFLAGS) -p "../../test_utils/abi_enforcer.mac" $< -o $@
 
@@ -75,7 +75,7 @@ abi_enforcer_regsave.o: abi_enforcer_regsave.asm
 	$(AS) $(ASFLAGS) $< -o $@
 
 check_offsets:
-	@$(MAKE) -C ../../test_utils INPUT_C=$(STRUCTS_FILE) INPUT_ASM=ej1.asm INPUT_PATH=$(STRUCTS_PATH) --no-print-directory
+	@$(MAKE) -C ../../test_utils INPUT_C=$(STRUCTS_FILE) INPUT_ASM=ej3.asm INPUT_PATH=$(STRUCTS_PATH) --no-print-directory
 
 .PHONY: clean run_c run_asm run_abi main_c main_asm valgrind_c valgrind_asm valgrind_abi
 

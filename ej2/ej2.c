@@ -1,91 +1,31 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "../ejs.h"
 
-#include "ej2.h"
+void bloquearUsuario(usuario_t *usuario, usuario_t *usuarioABloquear){
 
-/**
- * Marca el ejercicio 1A como hecho (`true`) o pendiente (`false`).
- *
- * Funciones a implementar:
- *   - es_indice_ordenado
- */
-bool EJERCICIO_2A_HECHO = false;
+  usuario->bloqueados[usuario->cantBloqueados] = usuarioABloquear;
+  usuario->cantBloqueados++;
 
-/**
- * Marca el ejercicio 1B como hecho (`true`) o pendiente (`false`).
- *
- * Funciones a implementar:
- *   - contarCombustibleAsignado
- */
-bool EJERCICIO_2B_HECHO = true;
+  borrarFeed(usuario->feed,usuarioABloquear);
+  borrarFeed(usuarioABloquear->feed,usuario);
 
-/**
- * Marca el ejercicio 1B como hecho (`true`) o pendiente (`false`).
- *
- * Funciones a implementar:
- *   - modificarUnidad
- */
-bool EJERCICIO_2C_HECHO = false;
+}
 
-/**
- * OPCIONAL: implementar en C
- */
-void optimizar(mapa_t mapa, attackunit_t* compartida, uint32_t (*fun_hash)(attackunit_t*)) {
- uint32_t hashCompartida = fun_hash(compartida);
-	compartida->references = 0;
-    for (int i = 0; i < 255; i++) {
-        for (int j = 0; j < 255; j++) {
+void borrarFeed(feed_t *feed, usuario_t *user){
+  // Usamos puntero indirecto (puntero a un puntero) para simplificar la lógica de re-enlazar.
+  // 'indirecto' apunta al puntero que debemos modificar (ya sea feed->first o anterior->next).
+  publicacion_t** indirecto = &(feed->first);
 
-            attackunit_t* actual = mapa[i][j];
+  while(*indirecto != NULL)
+  {
+    publicacion_t* actual = *indirecto;
 
-            if (actual == NULL){
-                continue;
-			}
-			if (actual == compartida){
-				compartida->references++;
-				continue;
-			}
-
-            if (fun_hash(actual) == hashCompartida) {
-                compartida->references ++;
-                mapa[i][j] = compartida;
-            }
-        }
+    if(actual->value->id_autor == user->id){
+      publicacion_t* siguiente = actual->next;
+      free(actual);
+      *indirecto= siguiente;
+    }else
+    {
+      indirecto = &(actual->next);
     }
-}
-
-
-	
-/**
- * OPCIONAL: implementar en C
- */
-uint32_t contarCombustibleAsignado(mapa_t mapa, uint16_t (*fun_combustible)(char*)) {
-	uint32_t reserva = 0;
-	for (int i = 0; i < 255; i++)
-	{
-		for (int j = 0; j < 255; j++)
-		{
-			attackunit_t* actual = mapa[i][j];
-			if (actual == NULL)
-			{
-				continue;
-			}
-			uint16_t comBase = fun_combustible(actual->clase);
-			uint16_t diferencia =+ actual->combustible - comBase;
-			reserva += diferencia;
-		}
-		
-	}
-	return reserva;
-}
-
-/**
- * OPCIONAL: implementar en C
- */
-void modificarUnidad(mapa_t mapa, uint8_t x, uint8_t y, void (*fun_modificar)(attackunit_t*)) {
-	// COMPLETAR
-	// Aclaraciones hechas durante el parcial: 
-	// - Se puede usar la función strcpy de string.h
-	// - Se puede asumir que el char clase[11] termina en 0
+  }
 }
